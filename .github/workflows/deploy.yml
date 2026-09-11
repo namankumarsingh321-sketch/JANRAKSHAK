@@ -1,0 +1,150 @@
+name: JANRAKSHAK CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with basic checks
+        run: python -c "import app; print('✅ App module loads successfully')"
+
+      - name: Run physics engine tests
+        run: |
+          python -c "
+          import math
+          from app import compute_fos_infinite_slope, estimate_pore_pressure_ratio, SOIL_CLASSES
+
+          # Test 1: Flat ground should be highly stable
+          soil = SOIL_CLASSES['residual_hill']
+          fos = compute_fos_infinite_slope(0.0, soil, 0.0)
+          assert fos > 10, f'Flat ground FoS too low: {fos}'
+          print('✅ Test 1 passed: Flat ground stability')
+
+          # Test 2: FoS decreases with slope
+          fos_10 = compute_fos_infinite_slope(math.radians(10), soil, 0.0)
+          fos_30 = compute_fos_infinite_slope(math.radians(30), soil, 0.0)
+          fos_45 = compute_fos_infinite_slope(math.radians(45), soil, 0.0)
+          assert fos_10 > fos_30 > fos_45, 'FoS should decrease with slope'
+          print(f'✅ Test 2 passed: FoS decreases with slope ({fos_10:.2f} > {fos_30:.2f} > {fos_45:.2f})')
+
+          # Test 3: FoS decreases with pore pressure
+          fos_dry = compute_fos_infinite_slope(math.radians(25), soil, 0.0)
+          fos_wet = compute_fos_infinite_slope(math.radians(25), soil, 0.5)
+          fos_sat = compute_fos_infinite_slope(math.radians(25), soil, 1.0)
+          assert fos_dry > fos_wet > fos_sat, 'FoS should decrease with saturation'
+          print(f'✅ Test 3 passed: FoS decreases with saturation ({fos_dry:.2f} > {fos_wet:.2f} > {fos_sat:.2f})')
+
+          # Test 4: Infiltration model
+          m_dry = estimate_pore_pressure_ratio(0, 0, soil)
+          m_light = estimate_pore_pressure_ratio(5, 2, soil)
+          m_heavy = estimate_pore_pressure_ratio(50, 12, soil)
+          assert m_dry < m_light < m_heavy, 'Saturation should increase with rainfall'
+          print(f'✅ Test 4 passed: Pore pressure increases with rain ({m_dry:.3f} < {m_light:.3f} < {m_heavy:.3f})')
+
+          # Test 5: All soil classes produce valid FoS
+          for name, soil in SOIL_CLASSES.items():
+              fos = compute_fos_infinite_slope(math.radians(20), soil, 0.3)
+              assert fos > 0, f'{name} produced negative FoS'
+              print(f'  ✅ {name}: FoS = {fos:.3f}')
+          print('✅ Test 5 passed: All soil classes valid')
+
+          print()
+          print('🎉 All physics engine tests passed!')
+          "
+
+      - name: Verify API endpoints load
+        run: |
+          python -c "
+          from app import app
+          client = app.test_client()
+
+          # Health check
+          r = client.get('/api/health')
+          assert r.status_code == 200
+          print('✅ /api/health OK')
+
+          # Segments
+          r = client.get('/api/segments')
+          assert r.status_code == 200
+          data = r.get_json()
+          assert 'segments' in data
+          assert len(data['segments']) > 0
+          print(f'✅ /api/segments returned {len(data[\"segments\"])} segments')
+
+          # Terrain stats
+          r = client.get('/api/terrain/stats')
+          assert r.status_code == 200
+          print('✅ /api/terrain/stats OK')
+
+          # Soil classes
+          r = client.get('/api/soil-classes')
+          assert r.status_code == 200
+          print('✅ /api/soil-classes OK')
+
+          # Thresholds
+          r = client.get('/api/thresholds')
+          assert r.status_code == 200
+          print('✅ /api/thresholds OK')
+
+          # Dashboard page
+          r = client.get('/')
+          assert r.status_code == 200
+          assert b'JANRAKSHAK' in r.data
+          print('✅ / dashboard serves HTML')
+
+          print()
+          print('🎉 All API endpoint tests passed!')
+          "
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build deployment artifact
+        run: |
+          echo "🚀 JANRAKSHAK deployment package ready"
+          echo "Files included:"
+          ls -la app.py index.html requirements.txt
+          echo ""
+          echo "To deploy: gunicorn app:app --bind 0.0.0.0:$PORT"
+
+      - name: Deployment smoke test
+        run: |
+          python -c "
+          from app import app
+          client = app.test_client()
+          r = client.get('/api/health')
+          data = r.get_json()
+          assert data['status'] == 'ok'
+          assert data['segments_loaded'] > 0
+          print('🚀 Deployment smoke test passed')
+          print(f'   Segments: {data[\"segments_loaded\"]}')
+          print(f'   DEM loaded: {data[\"dem_loaded\"]}')
+          "
