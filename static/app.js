@@ -701,44 +701,6 @@ function initTerrain() {
         terrainScene.remove(terrainScene.children[0]);
     }
 
-    console.log('Initializing 3D Terrain with size:', initW, 'x', initH);
-
-    terrainScene = new THREE.Scene();
-    terrainScene.background = new THREE.Color(0x0a0e1c);
-    terrainScene.fog = new THREE.FogExp2(0x0a0e1c, 0.02);
-
-    terrainCamera = new THREE.PerspectiveCamera(45, initW / initH, 0.1, 1000);
-    terrainCamera.position.set(0, 40, 60);
-    terrainCamera.lookAt(0, 0, 0);
-
-    terrainRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    terrainRenderer.setSize(initW, initH);
-    terrainRenderer.setPixelRatio(window.devicePixelRatio);
-    terrainRenderer.setClearColor(0x0a0e1c, 1);
-
-    // Clear container first
-    container.innerHTML = '';
-    container.appendChild(terrainRenderer.domElement);
-
-    // Check if OrbitControls is available safely without returning early
-    const OrbitControlsClass = (typeof THREE !== 'undefined' && THREE.OrbitControls) || window.OrbitControls;
-    if (OrbitControlsClass) {
-        try {
-            terrainControls = new OrbitControlsClass(terrainCamera, terrainRenderer.domElement);
-            terrainControls.enableDamping = true;
-            terrainControls.dampingFactor = 0.05;
-            terrainControls.autoRotate = true;
-            terrainControls.autoRotateSpeed = 2.0;
-            terrainControls.maxPolarAngle = Math.PI / 2 - 0.05;
-            terrainControls.enableZoom = true;
-        } catch (e) {
-            console.warn('OrbitControls instantiation failed:', e);
-            terrainControls = null;
-        }
-    } else {
-        console.warn('OrbitControls not loaded - using automated camera orbit fallback');
-    }
-
     // Lights
     const ambient = new THREE.AmbientLight(0x404040, 1.5);
     terrainScene.add(ambient);
