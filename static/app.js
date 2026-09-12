@@ -732,6 +732,38 @@ function initTerrain() {
         return Math.sin(t * Math.PI * 2) * 18;
     };
 
+    // Generate Canvas Map Texture for 3D Terrain Map Surface
+    const mapCanvas = document.createElement('canvas');
+    mapCanvas.width = 1024;
+    mapCanvas.height = 1024;
+    const mapCtx = mapCanvas.getContext('2d');
+
+    // Base dark topography background
+    mapCtx.fillStyle = '#0b1320';
+    mapCtx.fillRect(0, 0, 1024, 1024);
+
+    // Draw Topographic Contour Lines
+    mapCtx.strokeStyle = 'rgba(0, 242, 254, 0.15)';
+    mapCtx.lineWidth = 2;
+    for (let r = 40; r < 1000; r += 35) {
+        mapCtx.beginPath();
+        mapCtx.arc(512, 512, r, 0, Math.PI * 2);
+        mapCtx.stroke();
+    }
+
+    // Draw River Valley Flow Path
+    mapCtx.strokeStyle = 'rgba(2, 132, 199, 0.6)';
+    mapCtx.lineWidth = 18;
+    mapCtx.beginPath();
+    for (let py = 0; py <= 1024; py += 15) {
+        let px = 512 + Math.sin(py * 0.006) * 110;
+        if (py === 0) mapCtx.moveTo(px, py);
+        else mapCtx.lineTo(px, py);
+    }
+    mapCtx.stroke();
+
+    const mapTexture = new THREE.CanvasTexture(mapCanvas);
+
     // Generate real NH-07 mountain terrain surface using segment elevation profiles
     const geometry = new THREE.PlaneGeometry(200, 200, 80, 80);
     geometry.rotateX(-Math.PI / 2);
@@ -760,30 +792,37 @@ function initTerrain() {
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshStandardMaterial({
-        color: 0x121e2d,
+        map: mapTexture,
+        color: 0x1e293b,
         emissive: 0x081220,
-        wireframe: true,
-        roughness: 0.6,
-        transparent: true,
-        opacity: 0.85
+        wireframe: false,
+        roughness: 0.5,
+        metalness: 0.2
     });
 
     const terrain = new THREE.Mesh(geometry, material);
     terrainScene.add(terrain);
 
-    // Render Real NH-07 Highway Curve Line
-    const hwGeo = new THREE.BufferGeometry();
-    const hwVerts = [];
-    for (let z = -100; z <= 100; z += 2) {
-        const seg = getSectorAtZ(z);
-        const baseElev = seg ? (seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
-        const hwX = getHighwayX(z);
-        const hwY = (baseElev - 200) / 35 + 0.8;
-        hwVerts.push(hwX, hwY, z);
-    }
-    hwGeo.setAttribute('position', new THREE.Float32BufferAttribute(hwVerts, 3));
-    const hwMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
-    const highway = new THREE.Line(hwGeo, hwMat);
+    // Add 3D Wireframe Overlay for High-Tech GIS Terrain Contours
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, wireframe: true, transparent: true, opacity: 0.2 });
+    const wireMesh = new THREE.Mesh(geometry, wireMat);
+    terrainScene.add(wireMesh);
+
+    // Render 3D Connected Path Line passing through all 12 Route Points (S1 to S12)
+    const routePoints = [];
+    sortedSegs.forEach((seg, index) => {
+        const t = (index + 0.5) / Math.max(1, sortedSegs.length);
+        const z = -100 + t * 200;
+        const x = getHighwayX(z);
+        const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        const y = (baseElev - 200) / 35 + 1.2;
+        routePoints.push(new THREE.Vector3(x, y, z));
+    });
+
+    const routeCurve = new THREE.CatmullRomCurve3(routePoints);
+    const tubeGeo = new THREE.TubeGeometry(routeCurve, 120, 0.8, 8, false);
+    const tubeMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 0.8, roughness: 0.2 });
+    const highway = new THREE.Mesh(tubeGeo, tubeMat);
     terrainScene.add(highway);
 
     // Interactive 3D Points of Elevation & Depth (3D Pin Markers for S01 to S12)
