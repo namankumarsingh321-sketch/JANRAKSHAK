@@ -839,18 +839,55 @@ function initTerrain() {
     const updateHUD = (seg) => {
         if (!seg) return;
         const thSector = document.getElementById('thud-sector');
+        const thCoords = document.getElementById('thud-coords');
         const thElev = document.getElementById('thud-elev');
         const thDepth = document.getElementById('thud-depth');
         const thSlope = document.getElementById('thud-slope');
         const thFos = document.getElementById('thud-fos');
 
+        const lat = Array.isArray(seg.coords[0]) ? (seg.coords[0][0] + seg.coords[1][0])/2 : seg.coords[0];
+        const lon = Array.isArray(seg.coords[0]) ? (seg.coords[0][1] + seg.coords[1][1])/2 : seg.coords[1];
+
         if (thSector) thSector.textContent = `${seg.id} (${seg.name})`;
+        if (thCoords) thCoords.textContent = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
         if (thElev) thElev.textContent = `${seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)} m`;
         if (thDepth) thDepth.textContent = `${seg.soil ? (seg.soil.depth_m || seg.soil.soil_depth_m) : 2.5} m`;
         if (thSlope) thSlope.textContent = `${seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)}°`;
         if (thFos) {
             thFos.textContent = seg.fos ? seg.fos.min.toFixed(2) : '1.00';
-            thFos.style.color = seg.risk_level === 'UNSTABLE' ? '#990011' : (seg.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573');
+            const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
+            thFos.style.color = isEndangered ? '#a855f7' : (seg.risk_level === 'UNSTABLE' ? '#990011' : (seg.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573'));
+        }
+    };
+
+    // Render Waypoint Buttons at top of 3D Terrain Card
+    const wpBar = document.getElementById('terrain-waypoint-bar');
+    if (wpBar && sortedSegs.length > 0) {
+        wpBar.innerHTML = sortedSegs.map((s) => {
+            const lat = Array.isArray(s.coords[0]) ? (s.coords[0][0] + s.coords[1][0])/2 : s.coords[0];
+            const isEndangered = (s.id === 'NH07-S07' || s.id === 'NH07-S11' || s.id === 'S7' || s.id === 'S11');
+            const borderCol = isEndangered ? '#a855f7' : (s.risk_level === 'UNSTABLE' ? '#990011' : (s.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573'));
+            return `<button class="map-btn" style="border: 1px solid ${borderCol}; padding: 3px 8px; font-size: 10px; cursor: pointer;" onclick="playUIBeep('click'); focus3DRoutePoint('${s.id}')">${s.id.replace('NH07-', '')} (${lat.toFixed(2)}°, ${s.elevation || 350}m)</button>`;
+        }).join('');
+    }
+
+    window.focus3DRoutePoint = (segId) => {
+        const seg = allSegments.find(s => s.id === segId);
+        if (!seg) return;
+        updateHUD(seg);
+
+        const idx = sortedSegs.findIndex(s => s.id === segId);
+        if (idx !== -1) {
+            const t = (idx + 0.5) / Math.max(1, sortedSegs.length);
+            const z = -100 + t * 200;
+            const x = getHighwayX(z);
+            const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+            const groundY = (baseElev - 200) / 35 + 8;
+
+            if (terrainControls) {
+                terrainControls.target.set(x, groundY, z);
+                terrainCamera.position.set(x + 15, groundY + 25, z + 35);
+            }
         }
     };
 
