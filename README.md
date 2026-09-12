@@ -134,6 +134,10 @@ http://localhost:5000
 | `/api/incidents` | GET/POST | Record confirmed incidents / false alarms feedback loop |
 | `/api/health` | GET | System health & telemetry status |
 
+
+<div align="center">
+  <h1><img width="300" height="300" src="https://user-images.githubusercontent.com/173/77249168-99488080-6c15-11ea-98de-3d14a412265d.png" alt="Spiderman"></h1>
+
 ---
 
 ## 📜 License
