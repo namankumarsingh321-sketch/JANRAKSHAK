@@ -139,3 +139,4 @@ http://localhost:5000
 ## 📜 License
 
 MIT — Built for **COGNITIA 2026 Hackathon**
+
