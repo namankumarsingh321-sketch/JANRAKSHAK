@@ -650,24 +650,55 @@ function initTerrain() {
         return;
     }
 
-    let initW = container.clientWidth;
-    let initH = container.clientHeight;
+    let initW = container.clientWidth || (container.parentElement ? container.parentElement.clientWidth : 0) || 800;
+    let initH = container.clientHeight || (container.parentElement ? container.parentElement.clientHeight : 0) || 550;
 
-    // If container has no size, retry after a delay
-    if (initW < 50 || initH < 50) {
-        console.warn('Container too small:', initW, 'x', initH, '- retrying...');
-        setTimeout(initTerrain, 300);
-        return;
-    }
+    console.log('Initializing 3D Terrain with size:', initW, 'x', initH);
 
-    // If already initialized, just ensure sizing is correct
-    if (terrainRenderer) {
+    // If renderer doesn't exist, create WebGL renderer and scene
+    if (!terrainRenderer) {
+        terrainScene = new THREE.Scene();
+        terrainScene.background = new THREE.Color(0x0a0e1c);
+        terrainScene.fog = new THREE.FogExp2(0x0a0e1c, 0.02);
+
+        terrainCamera = new THREE.PerspectiveCamera(45, initW / initH, 0.1, 1000);
+        terrainCamera.position.set(0, 45, 75);
+        terrainCamera.lookAt(0, -10, 0);
+
+        terrainRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+        terrainRenderer.setSize(initW, initH);
+        terrainRenderer.setPixelRatio(window.devicePixelRatio);
+        terrainRenderer.setClearColor(0x0a0e1c, 1);
+
+        container.innerHTML = '';
+        container.appendChild(terrainRenderer.domElement);
+
+        const OrbitControlsClass = (typeof THREE !== 'undefined' && THREE.OrbitControls) || window.OrbitControls;
+        if (OrbitControlsClass) {
+            try {
+                terrainControls = new OrbitControlsClass(terrainCamera, terrainRenderer.domElement);
+                terrainControls.enableDamping = true;
+                terrainControls.dampingFactor = 0.05;
+                terrainControls.autoRotate = true;
+                terrainControls.autoRotateSpeed = 1.5;
+                terrainControls.maxPolarAngle = Math.PI / 2 - 0.05;
+                terrainControls.enableZoom = true;
+            } catch (e) {
+                console.warn('OrbitControls instantiation failed:', e);
+                terrainControls = null;
+            }
+        }
+    } else {
         terrainRenderer.setSize(initW, initH);
         if (terrainCamera) {
             terrainCamera.aspect = initW / initH;
             terrainCamera.updateProjectionMatrix();
         }
-        return;
+    }
+
+    // Clear previous children to rebuild scene cleanly
+    while (terrainScene.children.length > 0) {
+        terrainScene.remove(terrainScene.children[0]);
     }
 
     console.log('Initializing 3D Terrain with size:', initW, 'x', initH);
