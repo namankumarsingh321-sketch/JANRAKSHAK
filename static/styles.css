@@ -1,27 +1,27 @@
 :root {
-    --bg-base: #060913;
-    --bg-sidebar: #0a0e1c;
-    --card-bg: rgba(14, 20, 36, 0.75);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --card-hover-border: rgba(0, 242, 254, 0.3);
+    --bg-base: #0a0907;
+    --bg-sidebar: #120e0a;
+    --card-bg: rgba(24, 18, 12, 0.78);
+    --card-border: rgba(255, 180, 0, 0.12);
+    --card-hover-border: rgba(255, 170, 0, 0.45);
 
-    --text-primary: #f0f4f8;
-    --text-secondary: #8899ac;
-    --text-muted: #536275;
+    --text-primary: #fcf8f2;
+    --text-secondary: #b3a290;
+    --text-muted: #786854;
 
-    --accent-cyan: #00f2fe;
-    --accent-blue: #4facfe;
-    --accent-teal: #00c6ff;
+    --accent-cyan: #ffaa00;
+    --accent-blue: #ffc800;
+    --accent-teal: #ff9900;
 
-    --risk-unstable: #ff4757;
-    --risk-unstable-bg: rgba(255, 71, 87, 0.15);
-    --risk-marginal: #ffa502;
-    --risk-marginal-bg: rgba(255, 165, 2, 0.15);
+    --risk-unstable: #ff3344;
+    --risk-unstable-bg: rgba(255, 51, 68, 0.18);
+    --risk-marginal: #ff9900;
+    --risk-marginal-bg: rgba(255, 153, 0, 0.18);
     --risk-stable: #2ed573;
-    --risk-stable-bg: rgba(46, 213, 115, 0.15);
+    --risk-stable-bg: rgba(46, 213, 115, 0.18);
 
-    --glow-cyan: 0 0 20px rgba(0, 242, 254, 0.3);
-    --glow-red: 0 0 20px rgba(255, 71, 87, 0.4);
+    --glow-cyan: 0 0 20px rgba(255, 170, 0, 0.4);
+    --glow-red: 0 0 20px rgba(255, 51, 68, 0.5);
 }
 
 /* CRT Scanline Overlay */
@@ -158,13 +158,13 @@ body {
 .glow-1 {
     top: -100px;
     right: 10%;
-    background: radial-gradient(circle, #00f2fe, #4facfe);
+    background: radial-gradient(circle, #ffaa00, #ff6600);
 }
 
 .glow-2 {
     bottom: -150px;
     left: 20%;
-    background: radial-gradient(circle, #ff4757, #ff6b81);
+    background: radial-gradient(circle, #ff3344, #ffaa00);
 }
 
 /* App Shell Structure */

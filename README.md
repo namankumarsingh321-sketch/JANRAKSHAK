@@ -144,3 +144,5 @@ http://localhost:5000
 
 MIT — Built for **COGNITIA 2026 Hackathon**
 
+<div align="center">
+  <h1><img width="300" height="300" src="https://user-images.githubusercontent.com/173/77249168-99488080-6c15-11ea-98de-3d14a412265d.png" alt="Spiderman"></h1>
