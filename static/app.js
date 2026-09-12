@@ -110,8 +110,8 @@ movableMarker.on('dragend', async function(event) {
         const response = await fetch(url);
         const data = await response.json();
 
-        const rain = data.current.precipitation;
-        const temp = data.current.temperature_2m;
+        const rain = Number(data.current.precipitation || 0).toFixed(1);
+        const temp = Number(data.current.temperature_2m || 0).toFixed(1);
 
         // Update popup with live intelligence
         movableMarker.getPopup().setContent(`
@@ -132,7 +132,7 @@ movableMarker.on('dragend', async function(event) {
     } catch (err) {
         movableMarker.getPopup().setContent(`
             <div style="${popupStyle}">
-                <span style='color:#990011;'>Telemetry link failed.</span>
+                <span style='color:#ff4757;'>Telemetry link failed.</span>
             </div>
         `);
     }
@@ -157,11 +157,10 @@ async function fetchSegments() {
             renderMarkers(); // Update Map 3D Markers
             updateStats();
             updateTicker(); // Live ticker update
-            initTerrain(); // Update 3D Terrain Analysis with loaded segments
         }
     } catch (e) {
         console.error("Failed to load segments:", e);
-        rows.innerHTML = '<div style="padding:20px;color:#990011">Failed to connect to telemetry datalink. Retrying...</div>';
+        rows.innerHTML = '<div style="padding:20px;color:#ff4757">Failed to connect to telemetry datalink. Retrying...</div>';
     }
 }
 
@@ -173,12 +172,16 @@ function renderMarkers() {
 
     allSegments.forEach(seg => {
         const coords = segmentCoords[seg.id] || [30.1, 78.5]; // Fallback
-        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
-        const riskClass = isEndangered ? 'endangered' : seg.risk_level.toLowerCase();
-        const badgeColor = isEndangered ? '#a855f7' : (riskClass === 'unstable' ? '#990011' : (riskClass === 'marginal' ? '#ff9900' : '#2ed573'));
+        let riskClass = seg.risk_level.toLowerCase(); // 'unstable', 'marginal', 'stable'
+
+        // Highlight S07 (Devprayag) & S11 (Agastyamuni) in Purple
+        const isPurple = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11');
+        if (isPurple) {
+            riskClass = 'purple';
+        }
 
         // Create 3D HTML marker
-        const iconHtml = `<div class="custom-map-marker ${riskClass}">${seg.id.replace(/\D/g, '')}</div>`;
+        const iconHtml = `<div class="custom-map-marker ${riskClass}">${seg.id.replace('S', '')}</div>`;
         const customIcon = L.divIcon({
             html: iconHtml,
             className: 'dummy-leaflet-class', // Leaflet needs a class, but we style the inner div
@@ -188,20 +191,25 @@ function renderMarkers() {
 
         const marker = L.marker(coords, { icon: customIcon }).addTo(map);
 
+        const fosColor = isPurple ? '#a55eea' : (riskClass === 'unstable' ? '#ff4757' : (riskClass === 'marginal' ? '#ffa502' : '#2ed573'));
+        const rainFormatted = Number(seg.rainfall.accum_24h_mm || 0).toFixed(1);
+
+        const noteHTML = isPurple ? `<div style="font-size:9px; color:#a55eea; margin-top:6px; font-weight:bold;">★ Danger predicted by historical data</div>` : `<div style="font-size:9px; color:#536275; margin-top:8px;">CONFIDENCE: ${seg.confidence}</div>`;
+
         // Popup with rich data
         const popupContent = `
-            <div style="background:#0a0e1c; color:#f0f4f8; padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); width: 180px; cursor:pointer;" onclick="playUIBeep('click'); showSegmentProfile('${seg.id}')">
+            <div style="background:#0a0e1c; color:#f0f4f8; padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); width: 190px; cursor:pointer;" onclick="playUIBeep('click'); showSegmentProfile('${seg.id}')">
                 <h4 style="margin:0 0 5px; color:#00f2fe">${seg.name}</h4>
                 <div style="font-size:11px; margin-bottom:5px;">Chainage: KM ${seg.km}</div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">FoS:</span>
-                    <strong style="color:${badgeColor}">${seg.fos.min.toFixed(2)}</strong>
+                    <strong style="color:${fosColor}">${seg.fos.min.toFixed(2)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">24H Rain:</span>
-                    <strong>${seg.rainfall.accum_24h_mm} mm</strong>
+                    <strong>${rainFormatted} mm</strong>
                 </div>
-                <div style="font-size:9px; color:${isEndangered ? '#a855f7' : '#536275'}; margin-top:8px; font-weight:bold;">${isEndangered ? '🟣 HISTORICALLY ENDANGERED' : 'CONFIDENCE: ' + seg.confidence}</div>
+                ${noteHTML}
             </div>
         `;
 
@@ -211,6 +219,10 @@ function renderMarkers() {
 
         mapMarkers.push(marker);
     });
+
+    if (window.update3DCheckpoints) {
+        window.update3DCheckpoints();
+    }
 }
 
 // Map popup specific styles override
@@ -227,9 +239,12 @@ function render() {
     if (!allSegments.length) return;
 
     rows.innerHTML = allSegments.map((seg, idx) => {
-        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
-        const cls = isEndangered ? 'endangered' : seg.risk_level.toLowerCase();
-        const displayRisk = isEndangered ? 'Endangered' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+        let cls = seg.risk_level.toLowerCase();
+        if (seg.id === 'NH07-S07' || seg.id === 'NH07-S11') {
+            cls = 'purple';
+        }
+        const displayRisk = cls === 'purple' ? 'Hist Danger' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+        const rainFormatted = Number(seg.rainfall.accum_24h_mm || 0).toFixed(1);
 
         let confMarker = '●';
         if (seg.confidence === 'MEDIUM') confMarker = '◐';
@@ -241,7 +256,7 @@ function render() {
                 <small>${seg.name} (KM ${seg.km})</small>
             </div>
             <strong class="fos ${cls}">${seg.fos.min.toFixed(2)}</strong>
-            <span class="rain">${seg.rainfall.accum_24h_mm} mm</span>
+            <span class="rain">${rainFormatted} mm</span>
             <span class="confidence-text">${seg.confidence} · ${confMarker}</span>
             <span class="status ${cls}">${displayRisk}</span>
         </div>`;
@@ -654,326 +669,467 @@ function initTerrain() {
         return;
     }
 
-    if (!allSegments || allSegments.length === 0) {
-        setTimeout(initTerrain, 200);
+    let initW = container.clientWidth;
+    let initH = container.clientHeight;
+
+    // If container has no size, retry after a delay
+    if (initW < 50 || initH < 50) {
+        console.warn('Container too small:', initW, 'x', initH, '- retrying...');
+        setTimeout(initTerrain, 300);
         return;
     }
 
-    let initW = container.clientWidth || (container.parentElement ? container.parentElement.clientWidth : 0) || 800;
-    let initH = container.clientHeight || (container.parentElement ? container.parentElement.clientHeight : 0) || 550;
-
-    console.log('Initializing 3D Terrain with size:', initW, 'x', initH);
-
-    // If renderer doesn't exist, create WebGL renderer and scene
-    if (!terrainRenderer) {
-        terrainScene = new THREE.Scene();
-        terrainScene.background = new THREE.Color(0x0a0e1c);
-        terrainScene.fog = new THREE.FogExp2(0x0a0e1c, 0.02);
-
-        terrainCamera = new THREE.PerspectiveCamera(45, initW / initH, 0.1, 1000);
-        terrainCamera.position.set(0, 45, 75);
-        terrainCamera.lookAt(0, -10, 0);
-
-        terrainRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-        terrainRenderer.setSize(initW, initH);
-        terrainRenderer.setPixelRatio(window.devicePixelRatio);
-        terrainRenderer.setClearColor(0x0a0e1c, 1);
-
-        container.innerHTML = '';
-        container.appendChild(terrainRenderer.domElement);
-
-        const OrbitControlsClass = (typeof THREE !== 'undefined' && THREE.OrbitControls) || window.OrbitControls;
-        if (OrbitControlsClass) {
-            try {
-                terrainControls = new OrbitControlsClass(terrainCamera, terrainRenderer.domElement);
-                terrainControls.enableDamping = true;
-                terrainControls.dampingFactor = 0.05;
-                terrainControls.autoRotate = true;
-                terrainControls.autoRotateSpeed = 1.5;
-                terrainControls.maxPolarAngle = Math.PI / 2 - 0.05;
-                terrainControls.enableZoom = true;
-            } catch (e) {
-                console.warn('OrbitControls instantiation failed:', e);
-                terrainControls = null;
-            }
-        }
-    } else {
+    // If already initialized, just ensure sizing is correct
+    if (terrainRenderer) {
         terrainRenderer.setSize(initW, initH);
         if (terrainCamera) {
             terrainCamera.aspect = initW / initH;
             terrainCamera.updateProjectionMatrix();
         }
+        return;
     }
 
-    // Clear previous children to rebuild scene cleanly
-    while (terrainScene.children.length > 0) {
-        terrainScene.remove(terrainScene.children[0]);
+    console.log('Initializing 3D Terrain with size:', initW, 'x', initH);
+
+    terrainScene = new THREE.Scene();
+    terrainScene.background = new THREE.Color(0x0a0e1c);
+    terrainScene.fog = new THREE.FogExp2(0x0a0e1c, 0.02);
+
+    terrainCamera = new THREE.PerspectiveCamera(45, initW / initH, 0.1, 1000);
+    terrainCamera.position.set(0, 40, 60);
+    terrainCamera.lookAt(0, 0, 0);
+
+    terrainRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    terrainRenderer.setSize(initW, initH);
+    terrainRenderer.setPixelRatio(window.devicePixelRatio);
+    terrainRenderer.setClearColor(0x0a0e1c, 1);
+
+    // Clear container first
+    container.innerHTML = '';
+    container.appendChild(terrainRenderer.domElement);
+
+    // Check if OrbitControls is available safely without returning early
+    const OrbitControlsClass = (typeof THREE !== 'undefined' && THREE.OrbitControls) || window.OrbitControls;
+    if (OrbitControlsClass) {
+        try {
+            terrainControls = new OrbitControlsClass(terrainCamera, terrainRenderer.domElement);
+            terrainControls.enableDamping = true;
+            terrainControls.dampingFactor = 0.05;
+            terrainControls.autoRotate = true;
+            terrainControls.autoRotateSpeed = 1.5;
+
+            // Enable ALL MOTION: Rotation, Pan (shift), Zoom, Pitch, Yaw in EVERY direction
+            terrainControls.enableRotate = true;
+            terrainControls.enablePan = true;
+            terrainControls.screenSpacePanning = true; // Enables 2D screen-space panning up, down, left, right
+            terrainControls.enableZoom = true;
+
+            // Unrestrict angles so user can look from all angles (top-down, side, underneath, etc.)
+            terrainControls.minPolarAngle = 0;
+            terrainControls.maxPolarAngle = Math.PI - 0.01;
+            terrainControls.minAzimuthAngle = -Infinity;
+            terrainControls.maxAzimuthAngle = Infinity;
+
+            terrainControls.minDistance = 5;
+            terrainControls.maxDistance = 300;
+
+            // Mouse button assignments:
+            // Left Drag = Rotate/Orbit
+            // Right Drag / Shift+Drag = Pan/Move surface in any direction
+            // Scroll Wheel = Zoom
+            terrainControls.mouseButtons = {
+                LEFT: THREE.MOUSE.ROTATE,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT: THREE.MOUSE.PAN
+            };
+
+            terrainControls.touches = {
+                ONE: THREE.TOUCH.ROTATE,
+                TWO: THREE.TOUCH.DOLLY_PAN
+            };
+
+            // Pause auto-rotation when user starts manually moving
+            terrainControls.addEventListener('start', () => {
+                terrainControls.autoRotate = false;
+                const btnRotate = document.getElementById('btn-3d-rotate');
+                if (btnRotate) btnRotate.classList.remove('selected');
+            });
+        } catch (e) {
+            console.warn('OrbitControls instantiation failed:', e);
+            terrainControls = null;
+        }
+    } else {
+        console.warn('OrbitControls not loaded - using automated camera orbit fallback');
     }
 
     // Lights
     const ambient = new THREE.AmbientLight(0x404040, 1.5);
     terrainScene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffaa00, 1.2);
+    const dirLight = new THREE.DirectionalLight(0x00f2fe, 1.2);
     dirLight.position.set(100, 100, 50);
     terrainScene.add(dirLight);
-    const redLight = new THREE.DirectionalLight(0x990011, 0.6);
+    const redLight = new THREE.DirectionalLight(0xff4757, 0.5);
     redLight.position.set(-100, 50, -50);
     terrainScene.add(redLight);
 
-    // Sort segments by ID order (NH07-S01 to NH07-S12)
-    const sortedSegs = [...allSegments].sort((a, b) => {
-        const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
-        const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
-        return numA - numB;
-    });
-
-    const getSectorAtZ = (z) => {
-        const t = Math.max(0, Math.min(1, (z + 100) / 200));
-        const idx = Math.min(sortedSegs.length - 1, Math.floor(t * sortedSegs.length));
-        return sortedSegs[idx] || sortedSegs[0];
-    };
-
-    const getHighwayX = (z) => {
-        const t = (z + 100) / 200;
-        return Math.sin(t * Math.PI * 2) * 18;
-    };
-
-    // Generate Canvas Map Texture for 3D Terrain Map Surface
-    const mapCanvas = document.createElement('canvas');
-    mapCanvas.width = 1024;
-    mapCanvas.height = 1024;
-    const mapCtx = mapCanvas.getContext('2d');
-
-    // Base dark topography background
-    mapCtx.fillStyle = '#0b1320';
-    mapCtx.fillRect(0, 0, 1024, 1024);
-
-    // Draw Topographic Contour Lines
-    mapCtx.strokeStyle = 'rgba(0, 242, 254, 0.15)';
-    mapCtx.lineWidth = 2;
-    for (let r = 40; r < 1000; r += 35) {
-        mapCtx.beginPath();
-        mapCtx.arc(512, 512, r, 0, Math.PI * 2);
-        mapCtx.stroke();
-    }
-
-    // Draw River Valley Flow Path
-    mapCtx.strokeStyle = 'rgba(2, 132, 199, 0.6)';
-    mapCtx.lineWidth = 18;
-    mapCtx.beginPath();
-    for (let py = 0; py <= 1024; py += 15) {
-        let px = 512 + Math.sin(py * 0.006) * 110;
-        if (py === 0) mapCtx.moveTo(px, py);
-        else mapCtx.lineTo(px, py);
-    }
-    mapCtx.stroke();
-
-    const mapTexture = new THREE.CanvasTexture(mapCanvas);
-
-    // Generate real NH-07 mountain terrain surface using segment elevation profiles
-    const geometry = new THREE.PlaneGeometry(200, 200, 80, 80);
+    // Generate procedural mountain terrain
+    const geometry = new THREE.PlaneGeometry(160, 160, 64, 64);
     geometry.rotateX(-Math.PI / 2);
 
     const vertices = geometry.attributes.position.array;
     for (let i = 0; i < vertices.length; i += 3) {
         const x = vertices[i];
         const z = vertices[i + 2];
-
-        const seg = getSectorAtZ(z);
-        let baseElev = seg ? (seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
-        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
-        const slopeDeg = seg ? (seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)) : 30;
-
-        const hwX = getHighwayX(z);
-        const distFromHw = Math.abs(x - hwX);
-
-        let y = (baseElev - 200) / 35;
-        if (distFromHw > 8) {
-            const mountainRise = Math.tan((slopeDeg * Math.PI) / 180) * (distFromHw - 8) * 0.4;
-            y += Math.min(45, mountainRise);
-        }
-        y += Math.sin(x * 0.2) * Math.cos(z * 0.2) * 2.0;
-
+        let y = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 15;
+        y += Math.sin(x * 0.3) * Math.cos(z * 0.2) * 5;
+        y -= Math.abs(x) * 0.4;
+        y += (Math.random() - 0.5) * 1.5;
         vertices[i + 1] = y;
     }
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshStandardMaterial({
-        map: mapTexture,
-        color: 0x1e293b,
-        emissive: 0x081220,
-        wireframe: false,
+        color: 0x0a1929,
+        emissive: 0x051320,
+        wireframe: true,
         roughness: 0.5,
-        metalness: 0.2
+        transparent: true,
+        opacity: 0.8
     });
 
     const terrain = new THREE.Mesh(geometry, material);
     terrainScene.add(terrain);
 
-    // Add 3D Wireframe Overlay for High-Tech GIS Terrain Contours
-    const wireMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, wireframe: true, transparent: true, opacity: 0.2 });
-    const wireMesh = new THREE.Mesh(geometry, wireMat);
-    terrainScene.add(wireMesh);
+    // Map Lat/Lng coordinates to 3D Terrain Plane (X, Y, Z)
+    const segmentKeys = ['NH07-S01', 'NH07-S02', 'NH07-S03', 'NH07-S04', 'NH07-S05', 'NH07-S06', 'NH07-S07', 'NH07-S08', 'NH07-S09', 'NH07-S10', 'NH07-S11', 'NH07-S12'];
 
-    // Render 3D Connected Path Line passing through all 12 Route Points (S1 to S12)
-    const routePoints = [];
-    sortedSegs.forEach((seg, index) => {
-        const t = (index + 0.5) / Math.max(1, sortedSegs.length);
-        const z = -100 + t * 200;
-        const x = getHighwayX(z);
-        let baseElev = seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350);
-        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
-        const y = (baseElev - 200) / 35 + 1.2;
-        routePoints.push(new THREE.Vector3(x, y, z));
+    function getSegment3DPos(lat, lng) {
+        const normX = (lng - 78.20) / (79.60 - 78.20);
+        const x = (normX - 0.5) * 130;
+
+        const normZ = (lat - 30.05) / (30.78 - 30.05);
+        const z = (0.5 - normZ) * 130;
+
+        let y = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 15;
+        y += Math.sin(x * 0.3) * Math.cos(z * 0.2) * 5;
+        y -= Math.abs(x) * 0.4;
+
+        return new THREE.Vector3(x, y + 1.5, z);
+    }
+
+    // Collect all 12 checkpoint positions along the highway corridor
+    const checkpointPositions = segmentKeys.map(key => {
+        const coords = segmentCoords[key] || [30.1, 78.5];
+        return getSegment3DPos(coords[0], coords[1]);
     });
 
-    const routeCurve = new THREE.CatmullRomCurve3(routePoints);
-    const tubeGeo = new THREE.TubeGeometry(routeCurve, 120, 0.8, 8, false);
-    const tubeMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 0.8, roughness: 0.2 });
-    const highway = new THREE.Mesh(tubeGeo, tubeMat);
+    // 1. Curved 3D Highway Line connecting all 12 checkpoints sequentially
+    const highwayCurve = new THREE.CatmullRomCurve3(checkpointPositions);
+    const curvePoints = highwayCurve.getPoints(200);
+
+    const hwGeo = new THREE.BufferGeometry().setFromPoints(curvePoints);
+    const hwMat = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 3 });
+    const highway = new THREE.Line(hwGeo, hwMat);
     terrainScene.add(highway);
 
-    // Interactive 3D Points of Elevation & Depth (3D Pin Markers for S01 to S12)
-    const pinGroup = new THREE.Group();
-    const pinObjects = [];
-
-    sortedSegs.forEach((seg, index) => {
-        const t = (index + 0.5) / Math.max(1, sortedSegs.length);
-        const z = -100 + t * 200;
-        const x = getHighwayX(z);
-        let baseElev = seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350);
-        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
-        const groundY = (baseElev - 200) / 35 + 0.8;
-
-        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
-        const riskClass = seg.risk_level ? seg.risk_level.toLowerCase() : 'stable';
-        let pinColor = 0x2ed573; // Stable Green
-        if (isEndangered) pinColor = 0xa855f7; // Purple for Historically Endangered
-        else if (riskClass === 'unstable') pinColor = 0x990011; // Dark Red
-        else if (riskClass === 'marginal') pinColor = 0xff9900; // Solar Amber
-
-        // Vertical Pin Stem
-        const stemGeo = new THREE.CylinderGeometry(0.25, 0.25, 7, 8);
-        const stemMat = new THREE.MeshBasicMaterial({ color: pinColor, transparent: true, opacity: 0.85 });
-        const stem = new THREE.Mesh(stemGeo, stemMat);
-        stem.position.set(x, groundY + 3.5, z);
-
-        // Pin Top Sphere
-        const headGeo = new THREE.SphereGeometry(1.2, 16, 16);
-        const headMat = new THREE.MeshStandardMaterial({
-            color: pinColor,
-            emissive: pinColor,
-            emissiveIntensity: 0.6,
-            roughness: 0.2
-        });
-        const head = new THREE.Mesh(headGeo, headMat);
-        head.position.set(x, groundY + 7, z);
-
-        const pin = new THREE.Group();
-        pin.add(stem);
-        pin.add(head);
-        pin.userData = seg;
-
-        pinGroup.add(pin);
-        pinObjects.push(head);
+    // Translucent glowing wireframe 3D tube along the highway path
+    const tubeGeo = new THREE.TubeGeometry(highwayCurve, 120, 0.4, 8, false);
+    const tubeMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2fe,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35
     });
+    const highwayTube = new THREE.Mesh(tubeGeo, tubeMat);
+    terrainScene.add(highwayTube);
 
-    terrainScene.add(pinGroup);
+    // 2. 3D Checkpoint Markers Group (12 Sector Checkpoints matching Command Center map)
+    const checkpoint3DGroup = new THREE.Group();
+    terrainScene.add(checkpoint3DGroup);
 
-    // Interactive HUD Update on Hover / Raycasting
+    window.update3DCheckpoints = function() {
+        checkpoint3DGroup.clear();
+
+        segmentKeys.forEach((key) => {
+            const coords = segmentCoords[key] || [30.1, 78.5];
+            const pos = getSegment3DPos(coords[0], coords[1]);
+
+            // Determine risk status color (matching Command Center map pins)
+            const seg = allSegments.find(s => s.id === key);
+            let colorHex = 0x2ed573; // Green (stable) default
+            if (key === 'NH07-S07' || key === 'NH07-S11') {
+                colorHex = 0xa55eea; // Vibrant Purple for S07 & S11
+            } else if (seg) {
+                const riskClass = seg.risk_level.toLowerCase();
+                if (riskClass === 'unstable') colorHex = 0xff4757; // Red
+                else if (riskClass === 'marginal') colorHex = 0xffa502; // Orange
+            }
+
+            // A) Checkpoint Sphere
+            const sphereGeo = new THREE.SphereGeometry(1.2, 16, 16);
+            const sphereMat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 0.8,
+                roughness: 0.3
+            });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            sphere.position.copy(pos);
+            sphere.userData = { segId: key };
+            checkpoint3DGroup.add(sphere);
+
+            // B) Vertical Pin Beacon Line
+            const pinGeo = new THREE.BufferGeometry().setFromPoints([
+                pos,
+                new THREE.Vector3(pos.x, pos.y + 6, pos.z)
+            ]);
+            const pinMat = new THREE.LineBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 0.85
+            });
+            const pinLine = new THREE.Line(pinGeo, pinMat);
+            checkpoint3DGroup.add(pinLine);
+
+            // C) Top Pulsing Ring
+            const ringGeo = new THREE.RingGeometry(0.8, 1.4, 16);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: colorHex,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(pos.x, pos.y + 6, pos.z);
+            checkpoint3DGroup.add(ring);
+
+            // D) Sprite Label Canvas (S01, S02, ... S12)
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0a0e1c';
+            ctx.fillRect(0, 0, 128, 64);
+            ctx.strokeStyle = colorHex === 0xa55eea ? '#a55eea' : (colorHex === 0xff4757 ? '#ff4757' : (colorHex === 0xffa502 ? '#ffa502' : '#2ed573'));
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, 124, 60);
+
+            ctx.font = 'bold 28px "DM Mono", monospace';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(key.replace('NH07-', ''), 64, 32);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.95 });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.position.set(pos.x, pos.y + 9.5, pos.z);
+            sprite.scale.set(7, 3.5, 1);
+            sprite.userData = { segId: key };
+            checkpoint3DGroup.add(sprite);
+        });
+    };
+
+    window.update3DCheckpoints();
+
+    // 3. Flowing Telemetry Particles along the highway curve
+    const particleCount = 80;
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleProgress = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
+        particleProgress[i] = Math.random();
+        const pt = highwayCurve.getPoint(particleProgress[i]);
+        particlePositions[i * 3] = pt.x;
+        particlePositions[i * 3 + 1] = pt.y + 0.4;
+        particlePositions[i * 3 + 2] = pt.z;
+    }
+
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+        color: 0x00f2fe,
+        size: 1.1,
+        transparent: true,
+        blending: THREE.AdditiveBlending
+    });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    terrainScene.add(particles);
+
+    // 4. Raycaster Click Interaction on 3D Checkpoints
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const updateHUD = (seg) => {
-        if (!seg) return;
-        const thSector = document.getElementById('thud-sector');
-        const thCoords = document.getElementById('thud-coords');
-        const thElev = document.getElementById('thud-elev');
-        const thDepth = document.getElementById('thud-depth');
-        const thSlope = document.getElementById('thud-slope');
-        const thFos = document.getElementById('thud-fos');
-
-        const lat = Array.isArray(seg.coords[0]) ? (seg.coords[0][0] + seg.coords[1][0])/2 : seg.coords[0];
-        const lon = Array.isArray(seg.coords[0]) ? (seg.coords[0][1] + seg.coords[1][1])/2 : seg.coords[1];
-
-        if (thSector) thSector.textContent = `${seg.id} (${seg.name})`;
-        if (thCoords) thCoords.textContent = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
-        if (thElev) thElev.textContent = `${seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)} m`;
-        if (thDepth) thDepth.textContent = `${seg.soil ? (seg.soil.depth_m || seg.soil.soil_depth_m) : 2.5} m`;
-        if (thSlope) thSlope.textContent = `${seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)}°`;
-        if (thFos) {
-            thFos.textContent = seg.fos ? seg.fos.min.toFixed(2) : '1.00';
-            const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
-            thFos.style.color = isEndangered ? '#a855f7' : (seg.risk_level === 'UNSTABLE' ? '#990011' : (seg.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573'));
-        }
-    };
-
-    // Render Waypoint Buttons at top of 3D Terrain Card
-    const wpBar = document.getElementById('terrain-waypoint-bar');
-    if (wpBar && sortedSegs.length > 0) {
-        wpBar.innerHTML = sortedSegs.map((s) => {
-            const lat = Array.isArray(s.coords[0]) ? (s.coords[0][0] + s.coords[1][0])/2 : s.coords[0];
-            const isEndangered = (s.id === 'NH07-S07' || s.id === 'NH07-S11' || s.id === 'S7' || s.id === 'S11');
-            const borderCol = isEndangered ? '#a855f7' : (s.risk_level === 'UNSTABLE' ? '#990011' : (s.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573'));
-            return `<button class="map-btn" style="border: 1px solid ${borderCol}; padding: 3px 8px; font-size: 10px; cursor: pointer;" onclick="playUIBeep('click'); focus3DRoutePoint('${s.id}')">${s.id.replace('NH07-', '')} (${lat.toFixed(2)}°, ${s.elevation || 350}m)</button>`;
-        }).join('');
-    }
-
-    window.focus3DRoutePoint = (segId) => {
-        const seg = allSegments.find(s => s.id === segId);
-        if (!seg) return;
-        updateHUD(seg);
-
-        const idx = sortedSegs.findIndex(s => s.id === segId);
-        if (idx !== -1) {
-            const t = (idx + 0.5) / Math.max(1, sortedSegs.length);
-            const z = -100 + t * 200;
-            const x = getHighwayX(z);
-            const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
-            const groundY = (baseElev - 200) / 35 + 8;
-
-            if (terrainControls) {
-                terrainControls.target.set(x, groundY, z);
-                terrainCamera.position.set(x + 15, groundY + 25, z + 35);
-            }
-        }
-    };
-
-    const raycastTargets = [...pinObjects, highway];
-
-    const onPointerMove = (event) => {
-        const rect = terrainRenderer.domElement.getBoundingClientRect();
+    container.addEventListener('click', (event) => {
+        const rect = container.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, terrainCamera);
-        const intersects = raycaster.intersectObjects(raycastTargets);
+        const intersects = raycaster.intersectObjects(checkpoint3DGroup.children);
 
         if (intersects.length > 0) {
-            const hitObj = intersects[0].object;
-            let hitSeg = null;
-            if (hitObj.parent && hitObj.parent.userData && hitObj.parent.userData.id) {
-                hitSeg = hitObj.parent.userData;
-            } else if (intersects[0].point) {
-                const zHit = intersects[0].point.z;
-                hitSeg = getSectorAtZ(zHit);
+            for (let hit of intersects) {
+                if (hit.object.userData && hit.object.userData.segId) {
+                    playUIBeep('click');
+                    showSegmentProfile(hit.object.userData.segId);
+                    break;
+                }
             }
-            if (hitSeg) {
-                updateHUD(hitSeg);
-                terrainRenderer.domElement.style.cursor = 'pointer';
-            }
-        } else {
-            terrainRenderer.domElement.style.cursor = 'default';
         }
-    };
+    });
 
-    terrainRenderer.domElement.addEventListener('pointermove', onPointerMove);
-    terrainRenderer.domElement.addEventListener('click', onPointerMove);
+    // 5. Interactive Mouse & Touch Dragging Handlers for 3D Surface Movement
+    let isMouseDown = false;
+    let startMousePos = { x: 0, y: 0 };
 
-    // Initial HUD Load
-    if (sortedSegs.length > 0) {
-        updateHUD(sortedSegs[0]);
+    container.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        startMousePos = { x: e.clientX, y: e.clientY };
+    });
+
+    container.addEventListener('mousemove', (e) => {
+        if (!isMouseDown) return;
+
+        const deltaX = e.clientX - startMousePos.x;
+        const deltaY = e.clientY - startMousePos.y;
+
+        // If OrbitControls is not loaded or for direct fallback panning/rotation
+        if (!terrainControls) {
+            if (e.buttons === 2 || e.shiftKey) {
+                // Right click or Shift + Drag -> Pan/Shift 3D surface
+                terrainCamera.position.x -= deltaX * 0.15;
+                terrainCamera.position.y += deltaY * 0.15;
+            } else {
+                // Left click -> Rotate 3D camera
+                terrainCamera.position.x -= deltaX * 0.2;
+                terrainCamera.position.y += deltaY * 0.2;
+                terrainCamera.lookAt(0, 0, 0);
+            }
+        }
+
+        startMousePos = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+    // Touch Movement Support for Touchscreens
+    let startTouchPos = { x: 0, y: 0 };
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            startTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && !terrainControls) {
+            const deltaX = e.touches[0].clientX - startTouchPos.x;
+            const deltaY = e.touches[0].clientY - startTouchPos.y;
+
+            terrainCamera.position.x -= deltaX * 0.25;
+            terrainCamera.position.y += deltaY * 0.25;
+            terrainCamera.lookAt(0, 0, 0);
+
+            startTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+    }, { passive: true });
+
+    // 6. UI Navigation Control Buttons (Rotate, Top View, Zoom, Reset)
+    const btnRotate = document.getElementById('btn-3d-rotate');
+    if (btnRotate) {
+        btnRotate.onclick = () => {
+            if (terrainControls) {
+                terrainControls.autoRotate = !terrainControls.autoRotate;
+                if (terrainControls.autoRotate) {
+                    btnRotate.classList.add('selected');
+                } else {
+                    btnRotate.classList.remove('selected');
+                }
+            }
+        };
     }
+
+    const btnTopView = document.getElementById('btn-3d-top');
+    if (btnTopView) {
+        btnTopView.onclick = () => {
+            if (terrainCamera) {
+                terrainCamera.position.set(0, 110, 0.1);
+                terrainCamera.lookAt(0, 0, 0);
+                if (terrainControls) {
+                    terrainControls.target.set(0, 0, 0);
+                    terrainControls.autoRotate = false;
+                    terrainControls.update();
+                }
+                if (btnRotate) btnRotate.classList.remove('selected');
+            }
+        };
+    }
+
+    const btnZoomIn = document.getElementById('btn-3d-zoom-in');
+    if (btnZoomIn) {
+        btnZoomIn.onclick = () => {
+            if (terrainCamera) {
+                terrainCamera.position.multiplyScalar(0.82);
+                if (terrainControls) terrainControls.update();
+            }
+        };
+    }
+
+    const btnZoomOut = document.getElementById('btn-3d-zoom-out');
+    if (btnZoomOut) {
+        btnZoomOut.onclick = () => {
+            if (terrainCamera) {
+                terrainCamera.position.multiplyScalar(1.22);
+                if (terrainControls) terrainControls.update();
+            }
+        };
+    }
+
+    const btnReset = document.getElementById('btn-3d-reset');
+    if (btnReset) {
+        btnReset.onclick = () => {
+            if (terrainCamera) {
+                terrainCamera.position.set(0, 40, 60);
+                terrainCamera.lookAt(0, 0, 0);
+                if (terrainControls) {
+                    terrainControls.target.set(0, 0, 0);
+                    terrainControls.autoRotate = true;
+                    terrainControls.update();
+                }
+                if (btnRotate) btnRotate.classList.add('selected');
+            }
+        };
+    }
+
+    // Keyboard WASD & Arrow Keys movement for shifting/moving the 3D surface
+    window.addEventListener('keydown', (e) => {
+        const viewTerrain = document.getElementById('view-terrain');
+        if (!viewTerrain || viewTerrain.classList.contains('hidden')) return;
+
+        const panSpeed = 3.5;
+        if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+            terrainCamera.position.z -= panSpeed;
+            if (terrainControls) terrainControls.target.z -= panSpeed;
+        } else if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+            terrainCamera.position.z += panSpeed;
+            if (terrainControls) terrainControls.target.z += panSpeed;
+        } else if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+            terrainCamera.position.x -= panSpeed;
+            if (terrainControls) terrainControls.target.x -= panSpeed;
+        } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+            terrainCamera.position.x += panSpeed;
+            if (terrainControls) terrainControls.target.x += panSpeed;
+        } else if (e.key === 'q' || e.key === 'Q') {
+            terrainCamera.position.y += panSpeed;
+            if (terrainControls) terrainControls.target.y += panSpeed;
+        } else if (e.key === 'e' || e.key === 'E') {
+            terrainCamera.position.y -= panSpeed;
+            if (terrainControls) terrainControls.target.y -= panSpeed;
+        }
+
+        if (terrainControls) terrainControls.update();
+    });
 
     let orbitAngle = 0;
     function animateTerrain() {
@@ -988,16 +1144,15 @@ function initTerrain() {
             terrainCamera.lookAt(0, -10, 0);
         }
 
-        // Update particle positions
+        // Animate particles flowing along the curved highway line
         const positions = particles.geometry.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
-            positions[i*3+2] += particleSpeeds[i];
-            if (positions[i*3+2] > 80) {
-                positions[i*3+2] = -80;
-            }
-            let z = positions[i*3+2];
-            let y = Math.sin(0) * Math.cos(z * 0.1) * 15 + Math.sin(0) * Math.cos(z * 0.2) * 5 + 1.5;
-            positions[i*3+1] = y;
+            particleProgress[i] += 0.0025;
+            if (particleProgress[i] > 1.0) particleProgress[i] = 0.0;
+            const pt = highwayCurve.getPoint(particleProgress[i]);
+            positions[i * 3] = pt.x;
+            positions[i * 3 + 1] = pt.y + 0.4;
+            positions[i * 3 + 2] = pt.z;
         }
         particles.geometry.attributes.position.needsUpdate = true;
 
@@ -1045,6 +1200,10 @@ function initTerrain() {
 
     window.addEventListener('resize', handleResize);
 }
+
+// ----------------------------------------------------
+// Data Visualizations (Chart.js)
+// ----------------------------------------------------
 
 // Data Visualizations (Chart.js)
 let chartsInitialized = false;
@@ -1104,9 +1263,9 @@ function initCharts() {
                 datasets: [{
                     label: 'Sector S7 Risk Vector',
                     data: [40, 60, 90, 85, 70],
-                    backgroundColor: 'rgba(153, 0, 17, 0.2)',
-                    borderColor: '#990011',
-                    pointBackgroundColor: '#990011',
+                    backgroundColor: 'rgba(255, 71, 87, 0.2)',
+                    borderColor: '#ff4757',
+                    pointBackgroundColor: '#ff4757',
                 }]
             },
             options: {
@@ -1138,7 +1297,7 @@ function initCharts() {
                         'rgba(46, 213, 115, 0.6)',
                         'rgba(46, 213, 115, 0.4)',
                         'rgba(255, 165, 2, 0.6)',
-                        'rgba(153, 0, 17, 0.8)'
+                        'rgba(255, 71, 87, 0.8)'
                     ],
                     borderRadius: 4
                 }]
@@ -1210,7 +1369,7 @@ function updateChartData(seg) {
         const riskClass = seg.risk_level.toLowerCase();
         let color = '#2ed573'; // Stable
         if (riskClass === 'marginal') color = '#ffa502';
-        if (riskClass === 'unstable') color = '#990011';
+        if (riskClass === 'unstable') color = '#ff4757';
 
         window.radarChartInstance.data.datasets[0].borderColor = color;
         window.radarChartInstance.data.datasets[0].backgroundColor = color.replace(')', ', 0.2)').replace('rgb', 'rgba');
@@ -1239,8 +1398,8 @@ function updateTerrainData(seg) {
                 <div style="display:flex; justify-content:space-between"><span>SOIL Φ:</span><span style="color:#ffcc00">${seg.soil.phi_deg}°</span></div>
                 <div style="display:flex; justify-content:space-between"><span>COHESION:</span><span style="color:#ffcc00">${seg.soil.cohesion_kpa} kPa</span></div>
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1)">
-                    <div style="display:flex; justify-content:space-between"><span>CUR. FOs:</span><span style="color:${seg.fos.min < 1.0 ? '#990011' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</span></div>
-                    <div style="display:flex; justify-content:space-between"><span>STATUS:</span><span style="color:${seg.fos.min < 1.0 ? '#990011' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.risk_level}</span></div>
+                    <div style="display:flex; justify-content:space-between"><span>CUR. FOs:</span><span style="color:${seg.fos.min < 1.0 ? '#ff4757' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</span></div>
+                    <div style="display:flex; justify-content:space-between"><span>STATUS:</span><span style="color:${seg.fos.min < 1.0 ? '#ff4757' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.risk_level}</span></div>
                 </div>
             </div>
         `;
@@ -1265,15 +1424,15 @@ function showSegmentProfile(segId) {
     forecastBoxes.innerHTML = `
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+6H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['6h'] < 1.0 ? '#990011' : (f['6h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['6h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['6h'] < 1.0 ? '#ff4757' : (f['6h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['6h'].toFixed(2)}</div>
         </div>
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+12H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['12h'] < 1.0 ? '#990011' : (f['12h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['12h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['12h'] < 1.0 ? '#ff4757' : (f['12h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['12h'].toFixed(2)}</div>
         </div>
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+24H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['24h'] < 1.0 ? '#990011' : (f['24h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['24h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['24h'] < 1.0 ? '#ff4757' : (f['24h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['24h'].toFixed(2)}</div>
         </div>
     `;
 
@@ -1300,7 +1459,7 @@ function showSegmentProfile(segId) {
                 {
                     label: 'Slope Angle (°)',
                     data: slopeProfile,
-                    borderColor: '#990011',
+                    borderColor: '#ff4757',
                     backgroundColor: 'transparent',
                     borderDash: [4, 4],
                     yAxisID: 'ySlope',
@@ -1322,7 +1481,7 @@ function showSegmentProfile(segId) {
                 ySlope: {
                     type: 'linear',
                     position: 'right',
-                    title: { display: true, text: 'Slope (°)', color: '#990011' },
+                    title: { display: true, text: 'Slope (°)', color: '#ff4757' },
                     grid: { display: false }
                 },
                 x: { grid: { display: false } }
@@ -1361,9 +1520,9 @@ if (simBtn) {
         } else {
             simBtnText.textContent = 'Alert Demo';
             isSimulating = false;
-            simBtn.style.background = 'linear-gradient(135deg, rgba(153, 0, 17, 0.2), rgba(255, 165, 2, 0.2))';
-            simBtn.style.borderColor = 'rgba(153, 0, 17, 0.4)';
-            simBtn.style.color = '#990011';
+            simBtn.style.background = 'linear-gradient(135deg, rgba(255, 71, 87, 0.2), rgba(255, 165, 2, 0.2))';
+            simBtn.style.borderColor = 'rgba(255, 71, 87, 0.4)';
+            simBtn.style.color = '#ff4757';
             toggleStormEffect(false);
 
             try {
@@ -1400,8 +1559,8 @@ if (bulletinBtn) {
             let critHTML = '';
             if (data.critical_sectors.length > 0) {
                 critHTML = data.critical_sectors.map(c => `
-                    <div style="background: rgba(153, 0, 17, 0.15); border: 1px solid rgba(153, 0, 17, 0.4); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                        <div style="color: #990011; font-weight: bold;">🚨 CRITICAL SECTOR: ${c.id} — ${c.name} (KM ${c.km})</div>
+                    <div style="background: rgba(255, 71, 87, 0.15); border: 1px solid rgba(255, 71, 87, 0.4); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                        <div style="color: #ff4757; font-weight: bold;">🚨 CRITICAL SECTOR: ${c.id} — ${c.name} (KM ${c.km})</div>
                         <div style="margin-top: 4px; color: #f0f4f8;">• Current FoS: <strong>${c.fos_min.toFixed(2)}</strong> | Saturation Ratio: <strong>${c.saturation_ratio}</strong> | 24h Rain: <strong>${c.rain_24h_mm}mm</strong></div>
                         <div style="margin-top: 4px; color: #ff6b81; font-weight: bold;">➔ ACTION: ${c.recommended_action}</div>
                     </div>
@@ -1420,300 +1579,300 @@ if (bulletinBtn) {
                 <div style="margin-bottom: 16px;">
                     <div style="font-weight: bold; margin-bottom: 8px; color: #fff;">SECTOR STATUS SUMMARY (${data.total_monitored_sectors} Monitored Sectors):</div>
                     <div style="display: flex; gap: 16px;">
-                        <span>🔴 Unstable: <strong style="color: #990011">${data.unstable_count}</strong></span>
+                        <span>🔴 Unstable: <strong style="color: #ff4757">${data.unstable_count}</strong></span>
                         <span>🟠 Marginal: <strong style="color: #ffa502">${data.marginal_count}</strong></span>
-                        <span>Overall Level: <strong style="color: ${data.unstable_count > 0 ? '#990011' : '#2ed573'}">${data.overall_status}</strong></span>
-                    </div>
-                </div>
+                                                                           <span>Overall Level: <strong style="color: ${data.unstable_count > 0 ? '#ff4757' : '#2ed573'}">${data.overall_status}</strong></span>
+                                                                       </div>
+                                                                   </div>
 
-                <div style="margin-bottom: 16px;">
-                    <div style="font-weight: bold; margin-bottom: 8px; color: #fff;">RECOMMENDED EMERGENCY ADVISORIES:</div>
-                    ${critHTML}
-                </div>
+                                                                   <div style="margin-bottom: 16px;">
+                                                                       <div style="font-weight: bold; margin-bottom: 8px; color: #fff;">RECOMMENDED EMERGENCY ADVISORIES:</div>
+                                                                       ${critHTML}
+                                                                   </div>
 
-                <div style="font-size: 10px; color: var(--text-muted); font-style: italic;">
-                    ${data.disclaimer}
-                </div>
-            `;
-        } catch (e) {
-            body.innerHTML = '<span style="color: #990011;">Failed to generate bulletin stream.</span>';
-        }
-    };
-}
+                                                                   <div style="font-size: 10px; color: var(--text-muted); font-style: italic;">
+                                                                       ${data.disclaimer}
+                                                                   </div>
+                                                               `;
+                                                           } catch (e) {
+                                                               body.innerHTML = '<span style="color: #ff4757;">Failed to generate bulletin stream.</span>';
+                                                           }
+                                                       };
+                                                   }
 
-// Copy Advisory
-const copyBtn = document.getElementById('copy-bulletin-btn');
-if (copyBtn) {
-    copyBtn.onclick = () => {
-        const text = document.getElementById('bulletin-body').innerText;
-        navigator.clipboard.writeText(text);
-        const og = copyBtn.textContent;
-        copyBtn.textContent = 'Copied ✓';
-        setTimeout(() => copyBtn.textContent = og, 2000);
-    };
-}
+                                                   // Copy Advisory
+                                                   const copyBtn = document.getElementById('copy-bulletin-btn');
+                                                   if (copyBtn) {
+                                                       copyBtn.onclick = () => {
+                                                           const text = document.getElementById('bulletin-body').innerText;
+                                                           navigator.clipboard.writeText(text);
+                                                           const og = copyBtn.textContent;
+                                                           copyBtn.textContent = 'Copied ✓';
+                                                           setTimeout(() => copyBtn.textContent = og, 2000);
+                                                       };
+                                                   }
 
-// Close Modals
-const closeBul = document.getElementById('close-bulletin');
-if (closeBul) {
-    closeBul.onclick = () => {
-        document.getElementById('bulletin-modal').classList.add('hidden');
-        setTimeout(() => document.getElementById('bulletin-modal').style.display = 'none', 300);
-    };
-}
+                                                   // Close Modals
+                                                   const closeBul = document.getElementById('close-bulletin');
+                                                   if (closeBul) {
+                                                       closeBul.onclick = () => {
+                                                           document.getElementById('bulletin-modal').classList.add('hidden');
+                                                           setTimeout(() => document.getElementById('bulletin-modal').style.display = 'none', 300);
+                                                       };
+                                                   }
 
-const closeProf = document.getElementById('close-profile');
-if (closeProf) {
-    closeProf.onclick = () => {
-        document.getElementById('profile-modal').classList.add('hidden');
-        setTimeout(() => document.getElementById('profile-modal').style.display = 'none', 300);
-    };
-}
-
-
-
-// ----------------------------------------------------
-// Ground-Truth Incident Feedback Loop (Requirement 10)
-// ----------------------------------------------------
-async function loadIncidents() {
-    try {
-        const response = await fetch('/api/incidents');
-        if (response.ok) {
-            const incidents = await response.json();
-            renderIncidents(incidents);
-            const countBadge = document.getElementById('incident-count');
-            if (countBadge) countBadge.textContent = incidents.length + ' LOGGED';
-        }
-    } catch (e) {
-        console.warn('Could not load incidents:', e);
-    }
-}
-
-function renderIncidents(incidents) {
-    const container = document.getElementById('incident-rows');
-    if (!container) return;
-
-    if (!incidents || incidents.length === 0) {
-        container.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:12px; text-align:center;">No field incidents logged yet.</div>';
-        return;
-    }
-
-    container.innerHTML = incidents.slice().reverse().map((inc, idx) => {
-        const t = new Date(inc.timestamp);
-        const timeStr = t.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) + ' ' + t.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
-        const severityClass = (inc.severity === 'critical' || inc.severity === 'high') ? 'unstable' : inc.severity === 'medium' ? 'marginal' : 'stable';
-        const typeLabel = (inc.type || '').replace(/_/g, ' ').toUpperCase();
-        return `
-            <div class="row" style="--i:${idx};">
-                <div><b>${timeStr}</b></div>
-                <div>${inc.segment_id || '-'}</div>
-                <span class="rain">${typeLabel}</span>
-                <span class="status ${severityClass}" style="font-size:9px; padding:4px 8px;">${(inc.severity||'').toUpperCase()}</span>
-                <span class="confidence-text">✓ LOGGED</span>
-            </div>
-        `;
-    }).join('');
-}
-
-const incidentForm = document.getElementById('incident-form');
-if (incidentForm) {
-    incidentForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const statusEl = document.getElementById('inc-status');
-
-        const segmentId = document.getElementById('inc-segment').value;
-        const type = document.getElementById('inc-type').value;
-        const severity = document.getElementById('inc-severity').value;
-        const rainfall = parseFloat(document.getElementById('inc-rainfall').value) || 0;
-        const description = document.getElementById('inc-description').value.trim();
-
-        // Find FoS of the selected segment from current data
-        const seg = allSegments.find(s => s.id === segmentId);
-        const fosAtTime = seg ? seg.fos : null;
-
-        statusEl.textContent = 'Transmitting...';
-        statusEl.style.color = '#00f2fe';
-
-        try {
-            const res = await fetch('/api/incidents', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    segment_id: segmentId,
-                    type: type,
-                    severity: severity,
-                    description: description,
-                    fos_at_time: fosAtTime,
-                    rainfall_at_time: rainfall
-                })
-            });
-
-            if (res.ok) {
-                statusEl.textContent = '✓ Incident logged';
-                statusEl.style.color = '#2ed573';
-                incidentForm.reset();
-                loadIncidents();
-                setTimeout(() => { statusEl.textContent = ''; }, 3000);
-            } else {
-                statusEl.textContent = '✗ Server error';
-                statusEl.style.color = '#990011';
-            }
-        } catch (err) {
-            statusEl.textContent = '✗ Network error';
-            statusEl.style.color = '#990011';
-        }
-    });
-}
-
-// Load incidents on startup
-loadIncidents();
+                                                   const closeProf = document.getElementById('close-profile');
+                                                   if (closeProf) {
+                                                       closeProf.onclick = () => {
+                                                           document.getElementById('profile-modal').classList.add('hidden');
+                                                           setTimeout(() => document.getElementById('profile-modal').style.display = 'none', 300);
+                                                       };
+                                                   }
 
 
-// ----------------------------------------------------
-// Tactical UI Audio Feedback (Procedural Web Audio API)
-// ----------------------------------------------------
-const AudioContext = window.AudioContext || window.webkitAudioContext;
-const uiAudioCtx = new AudioContext();
 
-function playUIBeep(type = 'click') {
-    if (uiAudioCtx.state === 'suspended') uiAudioCtx.resume();
-    
-    const osc = uiAudioCtx.createOscillator();
-    const gain = uiAudioCtx.createGain();
-    
-    osc.connect(gain);
-    gain.connect(uiAudioCtx.destination);
-    
-    const now = uiAudioCtx.currentTime;
-    
-    if (type === 'click') {
-        // High pitched short tech ping
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.05, now + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-        osc.start(now);
-        osc.stop(now + 0.06);
-    } else if (type === 'hover') {
-        // Very subtle soft click
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, now);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.01);
-        gain.gain.linearRampToValueAtTime(0, now + 0.03);
-        osc.start(now);
-        osc.stop(now + 0.04);
-    } else if (type === 'confirm') {
-        // Double ping (e.g. calibration)
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1000, now);
-        osc.frequency.setValueAtTime(1400, now + 0.1);
-        
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.08, now + 0.02);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.08);
-        
-        gain.gain.setValueAtTime(0, now + 0.1);
-        gain.gain.linearRampToValueAtTime(0.08, now + 0.12);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.3);
-        
-        osc.start(now);
-        osc.stop(now + 0.35);
-    } else if (type === 'error') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.linearRampToValueAtTime(100, now + 0.2);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.1, now + 0.05);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.25);
-    }
-}
+                                                   // ----------------------------------------------------
+                                                   // Ground-Truth Incident Feedback Loop (Requirement 10)
+                                                   // ----------------------------------------------------
+                                                   async function loadIncidents() {
+                                                       try {
+                                                           const response = await fetch('/api/incidents');
+                                                           if (response.ok) {
+                                                               const incidents = await response.json();
+                                                               renderIncidents(incidents);
+                                                               const countBadge = document.getElementById('incident-count');
+                                                               if (countBadge) countBadge.textContent = incidents.length + ' LOGGED';
+                                                           }
+                                                       } catch (e) {
+                                                           console.warn('Could not load incidents:', e);
+                                                       }
+                                                   }
 
-// Dismiss alarm button
-const dismissBtn = document.getElementById('dismiss-emergency');
-if (dismissBtn) {
-    dismissBtn.addEventListener('click', () => {
-        window.emergencyMuted = true;
-        document.getElementById('emergency-banner').classList.remove('show');
-        if (window.alarmInterval) {
-            clearInterval(window.alarmInterval);
-            window.alarmInterval = null;
-        }
+                                                   function renderIncidents(incidents) {
+                                                       const container = document.getElementById('incident-rows');
+                                                       if (!container) return;
 
-        // Reset mute if it goes stable later
-        setTimeout(() => {
-            const unstableCount = allSegments.filter(s => s.risk_level === 'UNSTABLE').length;
-            if (unstableCount === 0) window.emergencyMuted = false;
-        }, 10000);
-    });
-}
+                                                       if (!incidents || incidents.length === 0) {
+                                                           container.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:12px; text-align:center;">No field incidents logged yet.</div>';
+                                                           return;
+                                                       }
 
-// Heavy Storm UI & Canvas Engine
-let stormRainFrame;
-let lightningInterval;
-function toggleStormEffect(active) {
-    const stormCont = document.getElementById('storm-container');
-    const stormRain = document.getElementById('storm-rain-canvas');
-    const stormLig = document.getElementById('storm-lightning');
-    if(!stormCont || !stormRain) return;
+                                                       container.innerHTML = incidents.slice().reverse().map((inc, idx) => {
+                                                           const t = new Date(inc.timestamp);
+                                                           const timeStr = t.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) + ' ' + t.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+                                                           const severityClass = (inc.severity === 'critical' || inc.severity === 'high') ? 'unstable' : inc.severity === 'medium' ? 'marginal' : 'stable';
+                                                           const typeLabel = (inc.type || '').replace(/_/g, ' ').toUpperCase();
+                                                           return `
+                                                               <div class="row" style="--i:${idx};">
+                                                                   <div><b>${timeStr}</b></div>
+                                                                   <div>${inc.segment_id || '-'}</div>
+                                                                   <span class="rain">${typeLabel}</span>
+                                                                   <span class="status ${severityClass}" style="font-size:9px; padding:4px 8px;">${(inc.severity||'').toUpperCase()}</span>
+                                                                   <span class="confidence-text">✓ LOGGED</span>
+                                                               </div>
+                                                           `;
+                                                       }).join('');
+                                                   }
 
-    if (active) {
-        stormCont.style.display = 'block';
-        playUIBeep('error'); // simulate siren/alert beep
+                                                   const incidentForm = document.getElementById('incident-form');
+                                                   if (incidentForm) {
+                                                       incidentForm.addEventListener('submit', async (e) => {
+                                                           e.preventDefault();
+                                                           const statusEl = document.getElementById('inc-status');
 
-        // Rain canvas logic
-        const ctx = stormRain.getContext('2d');
-        stormRain.width = window.innerWidth;
-        stormRain.height = window.innerHeight;
-        const raindrops = [];
-        for(let i=0; i<300; i++){
-            raindrops.push({
-                x: Math.random() * stormRain.width,
-                y: Math.random() * stormRain.height,
-                len: Math.random() * 20 + 10,
-                speed: Math.random() * 15 + 15
-            });
-        }
-        
-        function drawRain() {
-            ctx.clearRect(0, 0, stormRain.width, stormRain.height);
-            ctx.strokeStyle = 'rgba(174,194,224,0.6)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            for(let i=0; i<raindrops.length; i++) {
-                let d = raindrops[i];
-                ctx.moveTo(d.x, d.y);
-                ctx.lineTo(d.x - d.len/4, d.y + d.len);
-                d.y += d.speed;
-                d.x -= d.speed/4;
-                if(d.y > stormRain.height) {
-                    d.y = -20;
-                    d.x = Math.random() * stormRain.width + 50;
-                }
-            }
-            ctx.stroke();
-            stormRainFrame = requestAnimationFrame(drawRain);
-        }
-        drawRain();
+                                                           const segmentId = document.getElementById('inc-segment').value;
+                                                           const type = document.getElementById('inc-type').value;
+                                                           const severity = document.getElementById('inc-severity').value;
+                                                           const rainfall = parseFloat(document.getElementById('inc-rainfall').value) || 0;
+                                                           const description = document.getElementById('inc-description').value.trim();
 
-        // Lightning logic
-        lightningInterval = setInterval(() => {
-            if(Math.random() > 0.6) {
-                stormLig.style.animation = 'none';
-                void stormLig.offsetWidth; // trigger reflow
-                stormLig.style.animation = 'strobeLightning 0.5s ease-out';
-                setTimeout(() => playUIBeep('error'), 100);
-            }
-        }, 3000);
+                                                           // Find FoS of the selected segment from current data
+                                                           const seg = allSegments.find(s => s.id === segmentId);
+                                                           const fosAtTime = seg ? seg.fos : null;
 
-    } else {
-        stormCont.style.display = 'none';
-        cancelAnimationFrame(stormRainFrame);
-        clearInterval(lightningInterval);
-        stormLig.style.animation = 'none';
-    }
-}
+                                                           statusEl.textContent = 'Transmitting...';
+                                                           statusEl.style.color = '#00f2fe';
+
+                                                           try {
+                                                               const res = await fetch('/api/incidents', {
+                                                                   method: 'POST',
+                                                                   headers: { 'Content-Type': 'application/json' },
+                                                                   body: JSON.stringify({
+                                                                       segment_id: segmentId,
+                                                                       type: type,
+                                                                       severity: severity,
+                                                                       description: description,
+                                                                       fos_at_time: fosAtTime,
+                                                                       rainfall_at_time: rainfall
+                                                                   })
+                                                               });
+
+                                                               if (res.ok) {
+                                                                   statusEl.textContent = '✓ Incident logged';
+                                                                   statusEl.style.color = '#2ed573';
+                                                                   incidentForm.reset();
+                                                                   loadIncidents();
+                                                                   setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                                                               } else {
+                                                                   statusEl.textContent = '✗ Server error';
+                                                                   statusEl.style.color = '#ff4757';
+                                                               }
+                                                           } catch (err) {
+                                                               statusEl.textContent = '✗ Network error';
+                                                               statusEl.style.color = '#ff4757';
+                                                           }
+                                                       });
+                                                   }
+
+                                                   // Load incidents on startup
+                                                   loadIncidents();
+
+
+                                                   // ----------------------------------------------------
+                                                   // Tactical UI Audio Feedback (Procedural Web Audio API)
+                                                   // ----------------------------------------------------
+                                                   const AudioContext = window.AudioContext || window.webkitAudioContext;
+                                                   const uiAudioCtx = new AudioContext();
+
+                                                   function playUIBeep(type = 'click') {
+                                                       if (uiAudioCtx.state === 'suspended') uiAudioCtx.resume();
+
+                                                       const osc = uiAudioCtx.createOscillator();
+                                                       const gain = uiAudioCtx.createGain();
+
+                                                       osc.connect(gain);
+                                                       gain.connect(uiAudioCtx.destination);
+
+                                                       const now = uiAudioCtx.currentTime;
+
+                                                       if (type === 'click') {
+                                                           // High pitched short tech ping
+                                                           osc.type = 'sine';
+                                                           osc.frequency.setValueAtTime(1200, now);
+                                                           osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
+                                                           gain.gain.setValueAtTime(0, now);
+                                                           gain.gain.linearRampToValueAtTime(0.05, now + 0.01);
+                                                           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                                                           osc.start(now);
+                                                           osc.stop(now + 0.06);
+                                                       } else if (type === 'hover') {
+                                                           // Very subtle soft click
+                                                           osc.type = 'triangle';
+                                                           osc.frequency.setValueAtTime(400, now);
+                                                           gain.gain.setValueAtTime(0, now);
+                                                           gain.gain.linearRampToValueAtTime(0.01, now + 0.01);
+                                                           gain.gain.linearRampToValueAtTime(0, now + 0.03);
+                                                           osc.start(now);
+                                                           osc.stop(now + 0.04);
+                                                       } else if (type === 'confirm') {
+                                                           // Double ping (e.g. calibration)
+                                                           osc.type = 'sine';
+                                                           osc.frequency.setValueAtTime(1000, now);
+                                                           osc.frequency.setValueAtTime(1400, now + 0.1);
+
+                                                           gain.gain.setValueAtTime(0, now);
+                                                           gain.gain.linearRampToValueAtTime(0.08, now + 0.02);
+                                                           gain.gain.linearRampToValueAtTime(0.001, now + 0.08);
+
+                                                           gain.gain.setValueAtTime(0, now + 0.1);
+                                                           gain.gain.linearRampToValueAtTime(0.08, now + 0.12);
+                                                           gain.gain.linearRampToValueAtTime(0.001, now + 0.3);
+
+                                                           osc.start(now);
+                                                           osc.stop(now + 0.35);
+                                                       } else if (type === 'error') {
+                                                           osc.type = 'sawtooth';
+                                                           osc.frequency.setValueAtTime(200, now);
+                                                           osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+                                                           gain.gain.setValueAtTime(0, now);
+                                                           gain.gain.linearRampToValueAtTime(0.1, now + 0.05);
+                                                           gain.gain.linearRampToValueAtTime(0.001, now + 0.2);
+                                                           osc.start(now);
+                                                           osc.stop(now + 0.25);
+                                                       }
+                                                   }
+
+                                                   // Dismiss alarm button
+                                                   const dismissBtn = document.getElementById('dismiss-emergency');
+                                                   if (dismissBtn) {
+                                                       dismissBtn.addEventListener('click', () => {
+                                                           window.emergencyMuted = true;
+                                                           document.getElementById('emergency-banner').classList.remove('show');
+                                                           if (window.alarmInterval) {
+                                                               clearInterval(window.alarmInterval);
+                                                               window.alarmInterval = null;
+                                                           }
+
+                                                           // Reset mute if it goes stable later
+                                                           setTimeout(() => {
+                                                               const unstableCount = allSegments.filter(s => s.risk_level === 'UNSTABLE').length;
+                                                               if (unstableCount === 0) window.emergencyMuted = false;
+                                                           }, 10000);
+                                                       });
+                                                   }
+
+                                                   // Heavy Storm UI & Canvas Engine
+                                                   let stormRainFrame;
+                                                   let lightningInterval;
+                                                   function toggleStormEffect(active) {
+                                                       const stormCont = document.getElementById('storm-container');
+                                                       const stormRain = document.getElementById('storm-rain-canvas');
+                                                       const stormLig = document.getElementById('storm-lightning');
+                                                       if(!stormCont || !stormRain) return;
+
+                                                       if (active) {
+                                                           stormCont.style.display = 'block';
+                                                           playUIBeep('error'); // simulate siren/alert beep
+
+                                                           // Rain canvas logic
+                                                           const ctx = stormRain.getContext('2d');
+                                                           stormRain.width = window.innerWidth;
+                                                           stormRain.height = window.innerHeight;
+                                                           const raindrops = [];
+                                                           for(let i=0; i<300; i++){
+                                                               raindrops.push({
+                                                                   x: Math.random() * stormRain.width,
+                                                                   y: Math.random() * stormRain.height,
+                                                                   len: Math.random() * 20 + 10,
+                                                                   speed: Math.random() * 15 + 15
+                                                               });
+                                                           }
+
+                                                           function drawRain() {
+                                                               ctx.clearRect(0, 0, stormRain.width, stormRain.height);
+                                                               ctx.strokeStyle = 'rgba(174,194,224,0.6)';
+                                                               ctx.lineWidth = 1;
+                                                               ctx.beginPath();
+                                                               for(let i=0; i<raindrops.length; i++) {
+                                                                   let d = raindrops[i];
+                                                                   ctx.moveTo(d.x, d.y);
+                                                                   ctx.lineTo(d.x - d.len/4, d.y + d.len);
+                                                                   d.y += d.speed;
+                                                                   d.x -= d.speed/4;
+                                                                   if(d.y > stormRain.height) {
+                                                                       d.y = -20;
+                                                                       d.x = Math.random() * stormRain.width + 50;
+                                                                   }
+                                                               }
+                                                               ctx.stroke();
+                                                               stormRainFrame = requestAnimationFrame(drawRain);
+                                                           }
+                                                           drawRain();
+
+                                                           // Lightning logic
+                                                           lightningInterval = setInterval(() => {
+                                                               if(Math.random() > 0.6) {
+                                                                   stormLig.style.animation = 'none';
+                                                                   void stormLig.offsetWidth; // trigger reflow
+                                                                   stormLig.style.animation = 'strobeLightning 0.5s ease-out';
+                                                                   setTimeout(() => playUIBeep('error'), 100);
+                                                               }
+                                                           }, 3000);
+
+                                                       } else {
+                                                           stormCont.style.display = 'none';
+                                                           cancelAnimationFrame(stormRainFrame);
+                                                           clearInterval(lightningInterval);
+                                                           stormLig.style.animation = 'none';
+                                                       }
+                                                   }
