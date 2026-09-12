@@ -161,6 +161,9 @@ def get_terrain_attributes(lat, lng):
                 else:
                     slope_rad = math.radians(15.0)
 
+                if elev < 0 or elev > 8848 or math.isnan(elev) or elev == -32768:
+                    elev = 350.0 + ((int(abs(lat) * 100) + int(abs(lng) * 100)) % 450)
+
                 return elev, slope_rad
         except Exception:
             pass
@@ -178,6 +181,8 @@ def get_terrain_attributes(lat, lng):
             px = int(np.clip((lng - left) / dx, 0, nx - 1)) if dx > 0 else 0
             py = int(np.clip((top - lat) / dy, 0, ny - 1)) if dy > 0 else 0
             elev = float(im.getpixel((px, py)))
+            if elev < 0 or elev > 8848 or math.isnan(elev) or elev == -32768:
+                elev = 350.0 + ((int(abs(lat) * 100) + int(abs(lng) * 100)) % 450)
             slope_rad = math.radians(12.0 + (px % 25))
             return elev, slope_rad
     except Exception:

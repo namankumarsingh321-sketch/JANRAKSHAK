@@ -774,7 +774,8 @@ function initTerrain() {
         const z = vertices[i + 2];
 
         const seg = getSectorAtZ(z);
-        const baseElev = seg ? (seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
+        let baseElev = seg ? (seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
+        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
         const slopeDeg = seg ? (seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)) : 30;
 
         const hwX = getHighwayX(z);
@@ -814,7 +815,8 @@ function initTerrain() {
         const t = (index + 0.5) / Math.max(1, sortedSegs.length);
         const z = -100 + t * 200;
         const x = getHighwayX(z);
-        const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        let baseElev = seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
         const y = (baseElev - 200) / 35 + 1.2;
         routePoints.push(new THREE.Vector3(x, y, z));
     });
@@ -833,7 +835,8 @@ function initTerrain() {
         const t = (index + 0.5) / Math.max(1, sortedSegs.length);
         const z = -100 + t * 200;
         const x = getHighwayX(z);
-        const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        let baseElev = seg.elevation && seg.elevation > 0 ? seg.elevation : (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        if (baseElev < 0 || baseElev > 8848) baseElev = 350;
         const groundY = (baseElev - 200) / 35 + 0.8;
 
         const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
