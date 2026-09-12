@@ -2,7 +2,7 @@
 
 > **Physics-Based Slope Stability + Live Rainfall for NH-07 Uttarakhand**  
 > Geospatial Predictive Intelligence | COGNITIA 2026
-
+LIVE-https://janrakshak-cognitia.vercel.app/
 [![CI/CD Pipeline](https://github.com/<your-username>/janrakshak/actions/workflows/deploy.yml/badge.svg)](https://github.com/<your-username>/janrakshak/actions)
 
 ---
