@@ -175,9 +175,9 @@ function renderMarkers() {
         let riskClass = seg.risk_level.toLowerCase(); // 'unstable', 'marginal', 'stable'
 
         // Highlight S07 (Devprayag) & S11 (Agastyamuni) in Purple
-        const isPurple = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11');
+        const isPurple = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
         if (isPurple) {
-            riskClass = 'purple';
+            riskClass = 'purple endangered';
         }
 
         // Create 3D HTML marker
@@ -191,7 +191,7 @@ function renderMarkers() {
 
         const marker = L.marker(coords, { icon: customIcon }).addTo(map);
 
-        const fosColor = isPurple ? '#a55eea' : (riskClass === 'unstable' ? '#ff4757' : (riskClass === 'marginal' ? '#ffa502' : '#2ed573'));
+        const fosColor = isPurple ? '#a855f7' : (riskClass === 'unstable' ? '#990011' : (riskClass === 'marginal' ? '#ff9900' : '#2ed573'));
         const rainFormatted = Number(seg.rainfall.accum_24h_mm || 0).toFixed(1);
 
         const noteHTML = isPurple ? `<div style="font-size:9px; color:#a55eea; margin-top:6px; font-weight:bold;">★ Danger predicted by historical data</div>` : `<div style="font-size:9px; color:#536275; margin-top:8px;">CONFIDENCE: ${seg.confidence}</div>`;

@@ -1124,10 +1124,12 @@ footer {
     box-shadow: 0 0 15px var(--risk-stable);
 }
 
+.custom-map-marker.purple,
 .custom-map-marker.endangered {
-    background: #a855f7;
-    box-shadow: 0 0 15px #a855f7;
-    border-color: #ffffff;
+    background: #a855f7 !important;
+    box-shadow: 0 0 15px #a855f7 !important;
+    border: 2px solid #ffffff !important;
+    color: #ffffff !important;
 }
 
 /* Responsive */
