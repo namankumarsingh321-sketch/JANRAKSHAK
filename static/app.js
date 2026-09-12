@@ -132,7 +132,7 @@ movableMarker.on('dragend', async function(event) {
     } catch (err) {
         movableMarker.getPopup().setContent(`
             <div style="${popupStyle}">
-                <span style='color:#ff4757;'>Telemetry link failed.</span>
+                <span style='color:#990011;'>Telemetry link failed.</span>
             </div>
         `);
     }
@@ -160,7 +160,7 @@ async function fetchSegments() {
         }
     } catch (e) {
         console.error("Failed to load segments:", e);
-        rows.innerHTML = '<div style="padding:20px;color:#ff4757">Failed to connect to telemetry datalink. Retrying...</div>';
+        rows.innerHTML = '<div style="padding:20px;color:#990011">Failed to connect to telemetry datalink. Retrying...</div>';
     }
 }
 
@@ -192,7 +192,7 @@ function renderMarkers() {
                 <div style="font-size:11px; margin-bottom:5px;">Chainage: KM ${seg.km}</div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">FoS:</span>
-                    <strong style="color:${riskClass === 'unstable' ? '#ff4757' : (riskClass === 'marginal' ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</strong>
+                    <strong style="color:${riskClass === 'unstable' ? '#990011' : (riskClass === 'marginal' ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">24H Rain:</span>
@@ -916,9 +916,9 @@ function initCharts() {
                 datasets: [{
                     label: 'Sector S7 Risk Vector',
                     data: [40, 60, 90, 85, 70],
-                    backgroundColor: 'rgba(255, 71, 87, 0.2)',
-                    borderColor: '#ff4757',
-                    pointBackgroundColor: '#ff4757',
+                    backgroundColor: 'rgba(153, 0, 17, 0.2)',
+                    borderColor: '#990011',
+                    pointBackgroundColor: '#990011',
                 }]
             },
             options: {
@@ -950,7 +950,7 @@ function initCharts() {
                         'rgba(46, 213, 115, 0.6)',
                         'rgba(46, 213, 115, 0.4)',
                         'rgba(255, 165, 2, 0.6)',
-                        'rgba(255, 71, 87, 0.8)'
+                        'rgba(153, 0, 17, 0.8)'
                     ],
                     borderRadius: 4
                 }]
@@ -1022,7 +1022,7 @@ function updateChartData(seg) {
         const riskClass = seg.risk_level.toLowerCase();
         let color = '#2ed573'; // Stable
         if (riskClass === 'marginal') color = '#ffa502';
-        if (riskClass === 'unstable') color = '#ff4757';
+        if (riskClass === 'unstable') color = '#990011';
 
         window.radarChartInstance.data.datasets[0].borderColor = color;
         window.radarChartInstance.data.datasets[0].backgroundColor = color.replace(')', ', 0.2)').replace('rgb', 'rgba');
@@ -1051,8 +1051,8 @@ function updateTerrainData(seg) {
                 <div style="display:flex; justify-content:space-between"><span>SOIL Φ:</span><span style="color:#ffcc00">${seg.soil.phi_deg}°</span></div>
                 <div style="display:flex; justify-content:space-between"><span>COHESION:</span><span style="color:#ffcc00">${seg.soil.cohesion_kpa} kPa</span></div>
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1)">
-                    <div style="display:flex; justify-content:space-between"><span>CUR. FOs:</span><span style="color:${seg.fos.min < 1.0 ? '#ff4757' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</span></div>
-                    <div style="display:flex; justify-content:space-between"><span>STATUS:</span><span style="color:${seg.fos.min < 1.0 ? '#ff4757' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.risk_level}</span></div>
+                    <div style="display:flex; justify-content:space-between"><span>CUR. FOs:</span><span style="color:${seg.fos.min < 1.0 ? '#990011' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</span></div>
+                    <div style="display:flex; justify-content:space-between"><span>STATUS:</span><span style="color:${seg.fos.min < 1.0 ? '#990011' : (seg.fos.min < 1.35 ? '#ffa502' : '#2ed573')}">${seg.risk_level}</span></div>
                 </div>
             </div>
         `;
@@ -1077,15 +1077,15 @@ function showSegmentProfile(segId) {
     forecastBoxes.innerHTML = `
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+6H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['6h'] < 1.0 ? '#ff4757' : (f['6h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['6h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['6h'] < 1.0 ? '#990011' : (f['6h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['6h'].toFixed(2)}</div>
         </div>
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+12H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['12h'] < 1.0 ? '#ff4757' : (f['12h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['12h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['12h'] < 1.0 ? '#990011' : (f['12h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['12h'].toFixed(2)}</div>
         </div>
         <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center;">
             <div style="font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;">+24H PROJECTED FoS</div>
-            <div style="font-size: 20px; font-weight: bold; color: ${f['24h'] < 1.0 ? '#ff4757' : (f['24h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['24h'].toFixed(2)}</div>
+            <div style="font-size: 20px; font-weight: bold; color: ${f['24h'] < 1.0 ? '#990011' : (f['24h'] < 1.35 ? '#ffa502' : '#2ed573')}; font-family: 'DM Mono';">${f['24h'].toFixed(2)}</div>
         </div>
     `;
 
@@ -1112,7 +1112,7 @@ function showSegmentProfile(segId) {
                 {
                     label: 'Slope Angle (°)',
                     data: slopeProfile,
-                    borderColor: '#ff4757',
+                    borderColor: '#990011',
                     backgroundColor: 'transparent',
                     borderDash: [4, 4],
                     yAxisID: 'ySlope',
@@ -1134,7 +1134,7 @@ function showSegmentProfile(segId) {
                 ySlope: {
                     type: 'linear',
                     position: 'right',
-                    title: { display: true, text: 'Slope (°)', color: '#ff4757' },
+                    title: { display: true, text: 'Slope (°)', color: '#990011' },
                     grid: { display: false }
                 },
                 x: { grid: { display: false } }
@@ -1173,9 +1173,9 @@ if (simBtn) {
         } else {
             simBtnText.textContent = 'Alert Demo';
             isSimulating = false;
-            simBtn.style.background = 'linear-gradient(135deg, rgba(255, 71, 87, 0.2), rgba(255, 165, 2, 0.2))';
-            simBtn.style.borderColor = 'rgba(255, 71, 87, 0.4)';
-            simBtn.style.color = '#ff4757';
+            simBtn.style.background = 'linear-gradient(135deg, rgba(153, 0, 17, 0.2), rgba(255, 165, 2, 0.2))';
+            simBtn.style.borderColor = 'rgba(153, 0, 17, 0.4)';
+            simBtn.style.color = '#990011';
             toggleStormEffect(false);
 
             try {
@@ -1212,8 +1212,8 @@ if (bulletinBtn) {
             let critHTML = '';
             if (data.critical_sectors.length > 0) {
                 critHTML = data.critical_sectors.map(c => `
-                    <div style="background: rgba(255, 71, 87, 0.15); border: 1px solid rgba(255, 71, 87, 0.4); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                        <div style="color: #ff4757; font-weight: bold;">🚨 CRITICAL SECTOR: ${c.id} — ${c.name} (KM ${c.km})</div>
+                    <div style="background: rgba(153, 0, 17, 0.15); border: 1px solid rgba(153, 0, 17, 0.4); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                        <div style="color: #990011; font-weight: bold;">🚨 CRITICAL SECTOR: ${c.id} — ${c.name} (KM ${c.km})</div>
                         <div style="margin-top: 4px; color: #f0f4f8;">• Current FoS: <strong>${c.fos_min.toFixed(2)}</strong> | Saturation Ratio: <strong>${c.saturation_ratio}</strong> | 24h Rain: <strong>${c.rain_24h_mm}mm</strong></div>
                         <div style="margin-top: 4px; color: #ff6b81; font-weight: bold;">➔ ACTION: ${c.recommended_action}</div>
                     </div>
@@ -1232,9 +1232,9 @@ if (bulletinBtn) {
                 <div style="margin-bottom: 16px;">
                     <div style="font-weight: bold; margin-bottom: 8px; color: #fff;">SECTOR STATUS SUMMARY (${data.total_monitored_sectors} Monitored Sectors):</div>
                     <div style="display: flex; gap: 16px;">
-                        <span>🔴 Unstable: <strong style="color: #ff4757">${data.unstable_count}</strong></span>
+                        <span>🔴 Unstable: <strong style="color: #990011">${data.unstable_count}</strong></span>
                         <span>🟠 Marginal: <strong style="color: #ffa502">${data.marginal_count}</strong></span>
-                        <span>Overall Level: <strong style="color: ${data.unstable_count > 0 ? '#ff4757' : '#2ed573'}">${data.overall_status}</strong></span>
+                        <span>Overall Level: <strong style="color: ${data.unstable_count > 0 ? '#990011' : '#2ed573'}">${data.overall_status}</strong></span>
                     </div>
                 </div>
 
@@ -1248,7 +1248,7 @@ if (bulletinBtn) {
                 </div>
             `;
         } catch (e) {
-            body.innerHTML = '<span style="color: #ff4757;">Failed to generate bulletin stream.</span>';
+            body.innerHTML = '<span style="color: #990011;">Failed to generate bulletin stream.</span>';
         }
     };
 }
@@ -1368,11 +1368,11 @@ if (incidentForm) {
                 setTimeout(() => { statusEl.textContent = ''; }, 3000);
             } else {
                 statusEl.textContent = '✗ Server error';
-                statusEl.style.color = '#ff4757';
+                statusEl.style.color = '#990011';
             }
         } catch (err) {
             statusEl.textContent = '✗ Network error';
-            statusEl.style.color = '#ff4757';
+            statusEl.style.color = '#990011';
         }
     });
 }
