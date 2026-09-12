@@ -1508,30 +1508,11 @@ h1:hover {
     100% { transform: translate(0) }
 }
 
-/* 5. Map Radar Sweep Overlay */
+/* 5. Map Styling (Radar sweep animation removed) */
 #real-map {
     position: relative;
     overflow: hidden;
     border-radius: 12px;
-}
-#real-map::after {
-    content: '';
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 200%; height: 200%;
-    background: conic-gradient(from 0deg, transparent 70%, rgba(0, 242, 254, 0.3) 100%);
-    transform-origin: center;
-    animation: radarSweep 4s linear infinite;
-    z-index: 500; /* above tiles, below popups */
-    pointer-events: none;
-    border-radius: 50%;
-    margin-left: -100%; margin-top: -100%;
-    opacity: 0.8;
-    mix-blend-mode: screen;
-}
-@keyframes radarSweep {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 
 /* 6. Glowing Table Rows */
