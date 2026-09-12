@@ -157,6 +157,7 @@ async function fetchSegments() {
             renderMarkers(); // Update Map 3D Markers
             updateStats();
             updateTicker(); // Live ticker update
+            initTerrain(); // Update 3D Terrain Analysis with loaded segments
         }
     } catch (e) {
         console.error("Failed to load segments:", e);
@@ -650,6 +651,11 @@ function initTerrain() {
     const container = document.getElementById('terrain-canvas');
     if (!container) {
         console.warn('terrain-canvas container not found');
+        return;
+    }
+
+    if (!allSegments || allSegments.length === 0) {
+        setTimeout(initTerrain, 200);
         return;
     }
 
