@@ -1,0 +1,824 @@
+<title>3D Terrain Route Analyzer</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --text: #212529;
+    --text-secondary: #6c757d;
+    --accent: #4361ee;
+    --accent-light: #e9ecef;
+    --border: #dee2e6;
+    --shadow: rgba(0, 0, 0, 0.05);
+    --success: #2ecc71;
+    --warning: #f39c12;
+    --error: #e74c3c;
+    --route: #8b5cf6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --text: #f8f9fa;
+      --text-secondary: #adb5bd;
+      --accent: #4895ef;
+      --accent-light: #2d3748;
+      --border: #374151;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    padding: 16px;
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 16px;
+    height: 100%;
+  }
+
+  @media (max-width: 1024px) {
+    .container {
+      grid-template-columns: 1fr;
+      grid-template-rows: 60vh 1fr;
+    }
+  }
+
+  .canvas-container {
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  #canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .canvas-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    backdrop-filter: blur(4px);
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .panel-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .panel-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  button {
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex: 1;
+  }
+
+  button:hover {
+    background: #3a56d4;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover {
+    background: #ced4da;
+  }
+
+  .route-points {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .point-card {
+    background: var(--accent-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .point-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .point-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--route);
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .point-data {
+    font-size: 13px;
+    display: grid;
+    gap: 4px;
+  }
+
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .value {
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .stat-card {
+    background: var(--accent-light);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-unit {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .no-points {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+  }
+
+  .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  .instructions {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-top: 12px;
+  }
+</style>
+
+<div class="container">
+  <div class="canvas-container">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-overlay">
+      <div>Click terrain to add points • Drag to rotate • Scroll to zoom</div>
+      <div id="loadingStatus" class="loading">Loading 3D Terrain...</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">3D Route Analysis</h2>
+      </div>
+      <p class="panel-subtitle">Plan routes with elevation, slope, and GPS data</p>
+
+      <div class="controls">
+        <button id="clearRoute" disabled>Clear Route</button>
+        <button id="exportRoute" class="btn-secondary" disabled>Export Data</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Route Points</div>
+          <div class="stat-value" id="pointCount">0</div>
+          <div class="stat-unit">points</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Distance</div>
+          <div class="stat-value" id="totalDistance">0</div>
+          <div class="stat-unit">km</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Elevation Gain</div>
+          <div class="stat-value" id="elevationGain">0</div>
+          <div class="stat-unit">m</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Slope</div>
+          <div class="stat-value" id="avgSlope">0</div>
+          <div class="stat-unit">°</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Route Points</div>
+      <div id="routePoints" class="route-points">
+        <div class="no-points">
+          <div style="font-size: 24px; margin-bottom: 8px;">🗺️</div>
+          <div>Click on the 3D terrain to add route points</div>
+          <div class="instructions" style="margin-top: 8px;">
+            First point sets start, subsequent points create route
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  console.log('Starting 3D Terrain Application...');
+
+  let scene, camera, renderer, terrain;
+  let raycaster, mouse;
+  let routePoints = [];
+  let routeLine, routeMarkers = [];
+  let isMouseDown = false;
+  let lastMouseX = 0, lastMouseY = 0;
+  let terrainData = [];
+
+  function init() {
+    console.log('Initializing 3D scene...');
+
+    // Get canvas and set explicit dimensions
+    const canvas = document.getElementById('canvas');
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a20);
+
+    // Camera setup
+    camera = new THREE.PerspectiveCamera(
+      75,
+      canvas.width / canvas.height,
+      0.1,
+      1000
+    );
+    camera.position.set(40, 50, 40);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      antialias: true
+    });
+    renderer.setSize(canvas.width, canvas.height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+
+    console.log('Renderer created, setting up lights...');
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(50, 100, 50);
+    directionalLight.castShadow = true;
+    scene.add(directionalLight);
+
+    // Create terrain
+    createTerrain();
+
+    // Raycaster for mouse picking
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Event listeners
+    canvas.addEventListener('click', onCanvasClick);
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('wheel', onMouseWheel);
+    window.addEventListener('resize', onWindowResize);
+
+    // Button listeners
+    document.getElementById('clearRoute').addEventListener('click', clearRoute);
+    document.getElementById('exportRoute').addEventListener('click', exportRoute);
+
+    // Hide loading message
+    document.getElementById('loadingStatus').style.display = 'none';
+
+    console.log('3D scene initialized successfully');
+    animate();
+  }
+
+  function createTerrain() {
+    console.log('Creating terrain...');
+
+    const width = 64;
+    const height = 64;
+    const geometry = new THREE.PlaneGeometry(50, 50, width - 1, height - 1);
+
+    // Generate elevation data
+    const position = geometry.attributes.position;
+    terrainData = [];
+
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i);
+      const z = position.getZ(i);
+
+      // Simplex-like noise for terrain
+      let elevation = 0;
+      let amplitude = 1;
+      let frequency = 0.05;
+
+      for (let octave = 0; octave < 4; octave++) {
+        elevation += amplitude * noise(x * frequency, z * frequency);
+        amplitude *= 0.5;
+        frequency *= 2;
+      }
+
+      // Scale elevation
+      elevation = (elevation + 1) * 8;
+
+      // Add some mountains
+      const distance = Math.sqrt(x * x + z * z);
+      elevation += Math.max(0, 20 - distance) * 0.3;
+
+      position.setY(i, elevation);
+      terrainData.push(elevation);
+    }
+
+    geometry.computeVertexNormals();
+
+    // Create material with vertex colors
+    const material = new THREE.MeshPhongMaterial({
+      color: 0x3a7d34,
+      shininess: 30,
+      flatShading: false
+    });
+
+    terrain = new THREE.Mesh(geometry, material);
+    terrain.rotation.x = -Math.PI / 2;
+    terrain.castShadow = true;
+    terrain.receiveShadow = true;
+
+    // Store reference for picking
+    terrain.userData = {
+      geometry: geometry,
+      width: width,
+      height: height,
+      elevations: terrainData
+    };
+
+    scene.add(terrain);
+
+    console.log('Terrain created with', terrainData.length, 'vertices');
+  }
+
+  // Simple noise function
+  function noise(x, y) {
+    return Math.sin(x * 12.9898 + y * 78.233) * 43758.5453 % 1 * 2 - 1;
+  }
+
+  function onCanvasClick(event) {
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(terrain);
+
+    if (intersects.length > 0) {
+      const point = intersects[0].point;
+      const faceIndex = intersects[0].faceIndex;
+      addRoutePoint(point, faceIndex);
+    }
+  }
+
+  function addRoutePoint(point, faceIndex) {
+    // Get face for slope calculation
+    const geometry = terrain.userData.geometry;
+    const positions = geometry.attributes.position;
+
+    // Get face vertices (approximate)
+    const x = Math.round(point.x + 25) * 2;
+    const z = Math.round(point.z + 25) * 2;
+    const idx = Math.min(terrainData.length - 1, z * 128 + x);
+
+    const elevation = point.y;
+
+    // Calculate slope (simplified)
+    let slope = 0;
+    if (idx > 128 && idx < terrainData.length - 128) {
+      const left = terrainData[idx - 1];
+      const right = terrainData[idx + 1];
+      const up = terrainData[idx - 128];
+      const down = terrainData[idx + 128];
+      slope = Math.max(
+        Math.abs(elevation - left),
+        Math.abs(elevation - right),
+        Math.abs(elevation - up),
+        Math.abs(elevation - down)
+      ) * 5;
+    }
+
+    // Convert to GPS coordinates (simplified)
+    const lat = 28.7041 + (point.z / 111320);
+    const lon = 77.1025 + (point.x / (111320 * Math.cos(28.7041 * Math.PI / 180)));
+
+    const routePoint = {
+      position: point.clone(),
+      elevation: elevation,
+      slope: slope,
+      lat: lat,
+      lon: lon,
+      index: routePoints.length
+    };
+
+    routePoints.push(routePoint);
+
+    // Create marker
+    createMarker(point);
+
+    // Update route line
+    updateRouteLine();
+
+    // Update UI
+    updateUI();
+
+    console.log('Added point:', routePoint);
+  }
+
+  function createMarker(position) {
+    const geometry = new THREE.SphereGeometry(0.4, 16, 16);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x8b5cf6,
+      emissive: 0x8b5cf6,
+      emissiveIntensity: 0.2
+    });
+
+    const marker = new THREE.Mesh(geometry, material);
+    marker.position.copy(position);
+    marker.position.y += 0.5;
+    scene.add(marker);
+    routeMarkers.push(marker);
+  }
+
+  function updateRouteLine() {
+    // Remove old line
+    if (routeLine) {
+      scene.remove(routeLine);
+    }
+
+    if (routePoints.length < 2) return;
+
+    const points = routePoints.map(p => {
+      const elevated = p.position.clone();
+      elevated.y += 0.5;
+      return elevated;
+    });
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x8b5cf6,
+      linewidth: 3
+    });
+
+    routeLine = new THREE.Line(geometry, material);
+    scene.add(routeLine);
+  }
+
+  function updateUI() {
+    const clearBtn = document.getElementById('clearRoute');
+    const exportBtn = document.getElementById('exportRoute');
+    const hasPoints = routePoints.length > 0;
+
+    clearBtn.disabled = !hasPoints;
+    exportBtn.disabled = !hasPoints;
+
+    // Update stats
+    document.getElementById('pointCount').textContent = routePoints.length;
+
+    // Calculate distance and elevation gain
+    let totalDistance = 0;
+    let elevationGain = 0;
+    let totalSlope = 0;
+
+    for (let i = 1; i < routePoints.length; i++) {
+      const p1 = routePoints[i - 1];
+      const p2 = routePoints[i];
+
+      const dx = p2.position.x - p1.position.x;
+      const dy = p2.position.y - p1.position.y;
+      const dz = p2.position.z - p1.position.z;
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      totalDistance += distance;
+
+      if (p2.elevation > p1.elevation) {
+        elevationGain += p2.elevation - p1.elevation;
+      }
+
+      totalSlope += p2.slope;
+    }
+
+    document.getElementById('totalDistance').textContent = (totalDistance / 1000).toFixed(2);
+    document.getElementById('elevationGain').textContent = elevationGain.toFixed(0);
+    document.getElementById('avgSlope').textContent = routePoints.length > 0
+      ? (totalSlope / routePoints.length).toFixed(1)
+      : '0';
+
+    // Update route points list
+    const container = document.getElementById('routePoints');
+
+    if (routePoints.length === 0) {
+      container.innerHTML = `
+        <div class="no-points">
+          <div style="font-size: 24px; margin-bottom: 8px;">🗺️</div>
+          <div>Click on the 3D terrain to add route points</div>
+          <div class="instructions" style="margin-top: 8px;">
+            First point sets start, subsequent points create route
+          </div>
+        </div>
+      `;
+    } else {
+      let html = '';
+      routePoints.forEach((point, index) => {
+        html += `
+          <div class="point-card">
+            <div class="point-header">
+              <div class="point-number">${index + 1}</div>
+              <button class="btn-secondary" onclick="removePoint(${index})" style="padding: 4px 8px; font-size: 12px;">Remove</button>
+            </div>
+            <div class="point-data">
+              <div class="data-row">
+                <span class="label">Latitude</span>
+                <span class="value">${point.lat.toFixed(6)}°</span>
+              </div>
+              <div class="data-row">
+                <span class="label">Longitude</span>
+                <span class="value">${point.lon.toFixed(6)}°</span>
+              </div>
+              <div class="data-row">
+                <span class="label">Elevation</span>
+                <span class="value">${point.elevation.toFixed(1)} m</span>
+              </div>
+              <div class="data-row">
+                <span class="label">Slope</span>
+                <span class="value">${point.slope.toFixed(1)}°</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+  }
+
+  function removePoint(index) {
+    // Remove marker from scene
+    if (routeMarkers[index]) {
+      scene.remove(routeMarkers[index]);
+      routeMarkers.splice(index, 1);
+    }
+
+    // Remove point from array
+    routePoints.splice(index, 1);
+
+    // Update indices
+    routePoints.forEach((point, idx) => {
+      point.index = idx;
+    });
+
+    // Update route line
+    updateRouteLine();
+
+    // Update UI
+    updateUI();
+  }
+
+  function clearRoute() {
+    // Remove all markers
+    routeMarkers.forEach(marker => {
+      scene.remove(marker);
+    });
+
+    // Remove route line
+    if (routeLine) {
+      scene.remove(routeLine);
+      routeLine = null;
+    }
+
+    // Clear arrays
+    routePoints = [];
+    routeMarkers = [];
+
+    // Update UI
+    updateUI();
+  }
+
+  function exportRoute() {
+    if (routePoints.length === 0) return;
+
+    const data = {
+      timestamp: new Date().toISOString(),
+      routePoints: routePoints.map((p, i) => ({
+        index: i + 1,
+        latitude: p.lat.toFixed(6),
+        longitude: p.lon.toFixed(6),
+        elevation: p.elevation.toFixed(2),
+        slope: p.slope.toFixed(2),
+        position: {
+          x: p.position.x.toFixed(2),
+          y: p.position.y.toFixed(2),
+          z: p.position.z.toFixed(2)
+        }
+      })),
+      summary: {
+        totalPoints: routePoints.length,
+        totalDistance: document.getElementById('totalDistance').textContent,
+        elevationGain: document.getElementById('elevationGain').textContent,
+        averageSlope: document.getElementById('avgSlope').textContent
+      }
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `3d-route-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function onMouseDown(event) {
+    if (event.button === 0) { // Left click
+      isMouseDown = true;
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+    }
+  }
+
+  function onMouseMove(event) {
+    if (!isMouseDown) return;
+
+    const deltaX = event.clientX - lastMouseX;
+    const deltaY = event.clientY - lastMouseY;
+
+    const rotationSpeed = 0.01;
+    const radius = camera.position.length();
+    const theta = Math.atan2(camera.position.x, camera.position.z);
+    const phi = Math.acos(camera.position.y / radius);
+
+    const newTheta = theta - deltaX * rotationSpeed;
+    const newPhi = Math.max(0.1, Math.min(Math.PI - 0.1, phi - deltaY * rotationSpeed));
+
+    camera.position.x = radius * Math.sin(newPhi) * Math.sin(newTheta);
+    camera.position.y = radius * Math.cos(newPhi);
+    camera.position.z = radius * Math.sin(newPhi) * Math.cos(newTheta);
+    camera.lookAt(0, 0, 0);
+
+    lastMouseX = event.clientX;
+    lastMouseY = event.clientY;
+  }
+
+  function onMouseUp() {
+    isMouseDown = false;
+  }
+
+  function onMouseWheel(event) {
+    event.preventDefault();
+
+    const radius = camera.position.length();
+    const newRadius = Math.max(25, Math.min(150, radius + event.deltaY * 0.08));
+    const scale = newRadius / radius;
+
+    camera.position.multiplyScalar(scale);
+  }
+
+  function onWindowResize() {
+    const canvas = document.getElementById('canvas');
+    const container = canvas.parentElement;
+
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+
+    camera.aspect = canvas.width / canvas.height;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(canvas.width, canvas.height);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+
+  // Initialize when page loads
+  window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing 3D...');
+    init();
+  });
+</script>

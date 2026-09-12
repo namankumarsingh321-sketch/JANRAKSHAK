@@ -891,18 +891,29 @@ function initTerrain() {
         }
     };
 
+    const raycastTargets = [...pinObjects, highway];
+
     const onPointerMove = (event) => {
         const rect = terrainRenderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, terrainCamera);
-        const intersects = raycaster.intersectObjects(pinObjects);
+        const intersects = raycaster.intersectObjects(raycastTargets);
 
         if (intersects.length > 0) {
-            const hitSeg = intersects[0].object.parent.userData;
-            updateHUD(hitSeg);
-            terrainRenderer.domElement.style.cursor = 'pointer';
+            const hitObj = intersects[0].object;
+            let hitSeg = null;
+            if (hitObj.parent && hitObj.parent.userData && hitObj.parent.userData.id) {
+                hitSeg = hitObj.parent.userData;
+            } else if (intersects[0].point) {
+                const zHit = intersects[0].point.z;
+                hitSeg = getSectorAtZ(zHit);
+            }
+            if (hitSeg) {
+                updateHUD(hitSeg);
+                terrainRenderer.domElement.style.cursor = 'pointer';
+            }
         } else {
             terrainRenderer.domElement.style.cursor = 'default';
         }
