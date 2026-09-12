@@ -657,6 +657,7 @@ header p {
 .red-dot { background: var(--risk-unstable); box-shadow: 0 0 6px var(--risk-unstable); }
 .orange-dot { background: var(--risk-marginal); box-shadow: 0 0 6px var(--risk-marginal); }
 .green-dot { background: var(--risk-stable); box-shadow: 0 0 6px var(--risk-stable); }
+.purple-dot { background: #a855f7; box-shadow: 0 0 6px #a855f7; }
 
 .scale-indicator {
     pointer-events: auto;
@@ -880,6 +881,12 @@ header p {
     background: var(--risk-stable-bg);
     color: var(--risk-stable);
     border: 1px solid rgba(46, 213, 115, 0.3);
+}
+
+.status.endangered {
+    background: rgba(168, 85, 247, 0.22);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.4);
 }
 
 /* Control Sliders Panel */
@@ -1115,6 +1122,12 @@ footer {
 .custom-map-marker.stable {
     background: var(--risk-stable);
     box-shadow: 0 0 15px var(--risk-stable);
+}
+
+.custom-map-marker.endangered {
+    background: #a855f7;
+    box-shadow: 0 0 15px #a855f7;
+    border-color: #ffffff;
 }
 
 /* Responsive */

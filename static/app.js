@@ -172,10 +172,12 @@ function renderMarkers() {
 
     allSegments.forEach(seg => {
         const coords = segmentCoords[seg.id] || [30.1, 78.5]; // Fallback
-        const riskClass = seg.risk_level.toLowerCase(); // 'unstable', 'marginal', 'stable'
+        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
+        const riskClass = isEndangered ? 'endangered' : seg.risk_level.toLowerCase();
+        const badgeColor = isEndangered ? '#a855f7' : (riskClass === 'unstable' ? '#990011' : (riskClass === 'marginal' ? '#ff9900' : '#2ed573'));
 
         // Create 3D HTML marker
-        const iconHtml = `<div class="custom-map-marker ${riskClass}">${seg.id.replace('S', '')}</div>`;
+        const iconHtml = `<div class="custom-map-marker ${riskClass}">${seg.id.replace(/\D/g, '')}</div>`;
         const customIcon = L.divIcon({
             html: iconHtml,
             className: 'dummy-leaflet-class', // Leaflet needs a class, but we style the inner div
@@ -192,13 +194,13 @@ function renderMarkers() {
                 <div style="font-size:11px; margin-bottom:5px;">Chainage: KM ${seg.km}</div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">FoS:</span>
-                    <strong style="color:${riskClass === 'unstable' ? '#990011' : (riskClass === 'marginal' ? '#ffa502' : '#2ed573')}">${seg.fos.min.toFixed(2)}</strong>
+                    <strong style="color:${badgeColor}">${seg.fos.min.toFixed(2)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="color:#8899ac">24H Rain:</span>
                     <strong>${seg.rainfall.accum_24h_mm} mm</strong>
                 </div>
-                <div style="font-size:9px; color:#536275; margin-top:8px;">CONFIDENCE: ${seg.confidence}</div>
+                <div style="font-size:9px; color:${isEndangered ? '#a855f7' : '#536275'}; margin-top:8px; font-weight:bold;">${isEndangered ? '🟣 HISTORICALLY ENDANGERED' : 'CONFIDENCE: ' + seg.confidence}</div>
             </div>
         `;
 
@@ -224,8 +226,9 @@ function render() {
     if (!allSegments.length) return;
 
     rows.innerHTML = allSegments.map((seg, idx) => {
-        const cls = seg.risk_level.toLowerCase();
-        const displayRisk = cls.charAt(0).toUpperCase() + cls.slice(1);
+        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
+        const cls = isEndangered ? 'endangered' : seg.risk_level.toLowerCase();
+        const displayRisk = isEndangered ? 'Endangered' : (cls.charAt(0).toUpperCase() + cls.slice(1));
 
         let confMarker = '●';
         if (seg.confidence === 'MEDIUM') confMarker = '◐';
@@ -794,9 +797,11 @@ function initTerrain() {
         const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
         const groundY = (baseElev - 200) / 35 + 0.8;
 
+        const isEndangered = (seg.id === 'NH07-S07' || seg.id === 'NH07-S11' || seg.id === 'S7' || seg.id === 'S11');
         const riskClass = seg.risk_level ? seg.risk_level.toLowerCase() : 'stable';
         let pinColor = 0x2ed573; // Stable Green
-        if (riskClass === 'unstable') pinColor = 0x990011; // Dark Red
+        if (isEndangered) pinColor = 0xa855f7; // Purple for Historically Endangered
+        else if (riskClass === 'unstable') pinColor = 0x990011; // Dark Red
         else if (riskClass === 'marginal') pinColor = 0xff9900; // Solar Amber
 
         // Vertical Pin Stem

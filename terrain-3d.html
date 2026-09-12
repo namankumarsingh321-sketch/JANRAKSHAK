@@ -1,0 +1,769 @@
+<title>3D Terrain Analyzer</title>
+<style>
+  :root {
+    --bg: #f8f6f3;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #666666;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --border: #e5e7eb;
+    --success: #059669;
+    --warning: #d97706;
+    --error: #dc2626;
+    --shadow: rgba(0, 0, 0, 0.05);
+    --shadow-lg: rgba(0, 0, 0, 0.1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --text: #f5f5f5;
+      --text-secondary: #999999;
+      --accent: #3b82f6;
+      --accent-light: #1e3a8a;
+      --border: #333333;
+      --shadow: rgba(255, 255, 255, 0.05);
+      --shadow-lg: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --text: #f5f5f5;
+    --text-secondary: #999999;
+    --accent: #3b82f6;
+    --accent-light: #1e3a8a;
+    --border: #333333;
+    --shadow: rgba(255, 255, 255, 0.05);
+    --shadow-lg: rgba(255, 255, 255, 0.1);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 16px;
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 8px 0 0 0;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 1024px) {
+    .main-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .canvas-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px var(--shadow);
+    aspect-ratio: 16 / 9;
+    position: relative;
+  }
+
+  #canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .cursor-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    pointer-events: none;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+  }
+
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .data-row:last-child {
+    border-bottom: none;
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  button {
+    padding: 8px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  button:hover {
+    background: #1d4ed8;
+  }
+
+  button:active {
+    transform: scale(0.98);
+  }
+
+  .button-secondary {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  .button-secondary:hover {
+    background: #d1d5db;
+  }
+
+  .no-data {
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 12px 0;
+    text-align: center;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .stat-box {
+    background: var(--accent-light);
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .terrain-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+  }
+
+  .info-box {
+    background: var(--accent-light);
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    border-left: 3px solid var(--accent);
+    color: var(--text);
+  }
+
+  .slope-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .slope-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .slope-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--success), var(--warning), var(--error));
+  }
+
+  .loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+  }
+
+  .help-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+</style>
+
+<div class="container">
+  <header>
+    <h1>3D Terrain Analyzer</h1>
+    <p class="subtitle">Click on the terrain to analyze elevation and slope at any point</p>
+  </header>
+
+  <div class="main-grid">
+    <div class="canvas-wrapper">
+      <canvas id="canvas"></canvas>
+      <div class="cursor-hint">Click to analyze • Drag to rotate • Scroll to zoom</div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-title">Point Analysis</div>
+        <div id="pointData" class="no-data">Click on terrain to analyze</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Terrain Stats</div>
+        <div class="data-row">
+          <span class="label">Max Elevation</span>
+          <span class="value" id="maxElev">-</span>
+        </div>
+        <div class="data-row">
+          <span class="label">Min Elevation</span>
+          <span class="value" id="minElev">-</span>
+        </div>
+        <div class="data-row">
+          <span class="label">Avg Slope</span>
+          <span class="value" id="avgSlope">-</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Controls</div>
+        <div class="controls">
+          <button onclick="resetView()">Reset View</button>
+          <button class="button-secondary" onclick="toggleWireframe()">Toggle Wireframe</button>
+          <button class="button-secondary" onclick="exportData()">Export Data</button>
+        </div>
+        <div class="help-text">
+          • <strong>Drag</strong>: Rotate view<br>
+          • <strong>Scroll</strong>: Zoom<br>
+          • <strong>Right-click</strong>: Pan
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="terrain-legend">
+          <strong style="font-size: 13px; margin-bottom: 4px;">Elevation Legend</strong>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #2E5090;"></div>
+            <span>Low (Sea Level)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #5EA3A3;"></div>
+            <span>Medium</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #E8C547;"></div>
+            <span>High</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #FFFFFF;"></div>
+            <span>Peak (Snow)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  let scene, camera, renderer, terrain, controls;
+  let raycaster, mouse, intersects;
+  let terrainGeometry, terrainMaterial;
+  let selectedPoint = null;
+  let showWireframe = false;
+
+  // Procedural terrain generation using Perlin-like noise
+  function generateTerrainData(width, height, scale = 1) {
+    const data = [];
+    const simplex = new SimplexNoise();
+
+    for (let i = 0; i < height; i++) {
+      for (let j = 0; j < width; j++) {
+        const x = j / width * 4;
+        const y = i / height * 4;
+
+        // Multi-octave noise for realistic terrain
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        let maxValue = 0;
+
+        for (let octave = 0; octave < 5; octave++) {
+          value += amplitude * simplex.noise(x * frequency, y * frequency, octave * 0.5);
+          maxValue += amplitude;
+          amplitude *= 0.5;
+          frequency *= 2;
+        }
+
+        data.push((value / maxValue) * scale);
+      }
+    }
+    return data;
+  }
+
+  // Simple Simplex-like noise implementation
+  class SimplexNoise {
+    constructor() {
+      this.p = [];
+      for (let i = 0; i < 256; i++) {
+        this.p[i] = Math.floor(Math.random() * 256);
+      }
+      for (let i = 0; i < 256; i++) {
+        this.p[256 + i] = this.p[i];
+      }
+    }
+
+    fade(t) {
+      return t * t * t * (t * (t * 6 - 15) + 10);
+    }
+
+    lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    grad(hash, x, y) {
+      const h = hash & 15;
+      const u = h < 8 ? x : y;
+      const v = h < 8 ? y : x;
+      return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+
+    noise(x, y, seed = 0) {
+      x += seed * 73;
+      const xi = Math.floor(x) & 255;
+      const yi = Math.floor(y) & 255;
+
+      const xf = x - Math.floor(x);
+      const yf = y - Math.floor(y);
+
+      const u = this.fade(xf);
+      const v = this.fade(yf);
+
+      const aa = this.p[this.p[xi] + yi];
+      const ab = this.p[this.p[xi] + yi + 1];
+      const ba = this.p[this.p[xi + 1] + yi];
+      const bb = this.p[this.p[xi + 1] + yi + 1];
+
+      const x1 = this.lerp(this.grad(aa, xf, yf), this.grad(ba, xf - 1, yf), u);
+      const x2 = this.lerp(this.grad(ab, xf, yf - 1), this.grad(bb, xf - 1, yf - 1), u);
+
+      return this.lerp(x1, x2, v);
+    }
+  }
+
+  function init() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0.15, 0.15, 0.18);
+    scene.fog = new THREE.Fog(0x262630, 100, 300);
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(
+      75,
+      document.getElementById('canvas').clientWidth / document.getElementById('canvas').clientHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(30, 40, 30);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, canvas: document.getElementById('canvas') });
+    renderer.setSize(
+      document.getElementById('canvas').clientWidth,
+      document.getElementById('canvas').clientHeight
+    );
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(50, 50, 50);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.far = 200;
+    directionalLight.shadow.camera.left = -100;
+    directionalLight.shadow.camera.right = 100;
+    directionalLight.shadow.camera.top = 100;
+    directionalLight.shadow.camera.bottom = -100;
+    scene.add(directionalLight);
+
+    // Terrain generation
+    const terrainWidth = 64;
+    const terrainHeight = 64;
+    const elevationScale = 30;
+    const elevationData = generateTerrainData(terrainWidth, terrainHeight, elevationScale);
+
+    // Geometry
+    terrainGeometry = new THREE.BufferGeometry();
+    const positions = [];
+    const colors = [];
+
+    for (let i = 0; i < terrainHeight; i++) {
+      for (let j = 0; j < terrainWidth; j++) {
+        const x = (j - terrainWidth / 2) * 0.8;
+        const z = (i - terrainHeight / 2) * 0.8;
+        const y = elevationData[i * terrainWidth + j];
+
+        positions.push(x, y, z);
+
+        // Color based on elevation
+        let r, g, b;
+        if (y < 5) {
+          r = 0.18; g = 0.31; b = 0.56; // Deep water
+        } else if (y < 10) {
+          r = 0.37; g = 0.64; b = 0.64; // Shallow
+        } else if (y < 20) {
+          r = 0.34; g = 0.52; b = 0.24; // Green
+        } else if (y < 25) {
+          r = 0.92; g = 0.77; b = 0.28; // Brown
+        } else {
+          const t = Math.min(1, (y - 25) / 5);
+          r = 1; g = 1; b = 1; // Snow
+        }
+
+        colors.push(r, g, b);
+      }
+    }
+
+    // Indices for faces
+    const indices = [];
+    for (let i = 0; i < terrainHeight - 1; i++) {
+      for (let j = 0; j < terrainWidth - 1; j++) {
+        const a = i * terrainWidth + j;
+        const b = a + 1;
+        const c = a + terrainWidth;
+        const d = c + 1;
+
+        indices.push(a, c, b);
+        indices.push(b, c, d);
+      }
+    }
+
+    terrainGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    terrainGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    terrainGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+    terrainGeometry.computeVertexNormals();
+
+    // Material
+    terrainMaterial = new THREE.MeshPhongMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      flatShading: false,
+      shininess: 30
+    });
+
+    terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+    terrain.castShadow = true;
+    terrain.receiveShadow = true;
+    terrain.userData = { elevationData, width: terrainWidth, height: terrainHeight, scale: 0.8 };
+    scene.add(terrain);
+
+    // Raycaster for mouse picking
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Event listeners
+    window.addEventListener('click', onCanvasClick);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('wheel', onMouseWheel, { passive: false });
+    window.addEventListener('contextmenu', onContextMenu, false);
+
+    // Update stats
+    updateTerrainStats(elevationData);
+
+    // Animation loop
+    animate();
+  }
+
+  function onCanvasClick(event) {
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(terrain);
+
+    if (intersects.length > 0) {
+      const point = intersects[0].point;
+      const faceIndex = intersects[0].faceIndex;
+
+      analyzePoint(point, faceIndex);
+    }
+  }
+
+  function onMouseMove(event) {
+    // Optional: highlight point on hover
+  }
+
+  function onMouseWheel(event) {
+    event.preventDefault();
+    const zoomSpeed = 2;
+    const direction = camera.position.clone().normalize();
+    const currentDist = camera.position.length();
+    const newDist = Math.max(20, Math.min(200, currentDist + event.deltaY * 0.1));
+
+    camera.position.copy(direction.multiplyScalar(newDist));
+  }
+
+  function onContextMenu(event) {
+    event.preventDefault();
+  }
+
+  function analyzePoint(point, faceIndex) {
+    const { elevationData, width, height, scale } = terrain.userData;
+
+    // Get neighboring points for slope calculation
+    const posAttr = terrainGeometry.getAttribute('position');
+    const indices = terrainGeometry.getIndex();
+
+    // Get face vertices
+    const i1 = indices.getX(faceIndex * 3);
+    const i2 = indices.getX(faceIndex * 3 + 1);
+    const i3 = indices.getX(faceIndex * 3 + 2);
+
+    const p1 = new THREE.Vector3(posAttr.getX(i1), posAttr.getY(i1), posAttr.getZ(i1));
+    const p2 = new THREE.Vector3(posAttr.getX(i2), posAttr.getY(i2), posAttr.getZ(i2));
+    const p3 = new THREE.Vector3(posAttr.getX(i3), posAttr.getY(i3), posAttr.getZ(i3));
+
+    // Calculate face normal (slope direction)
+    const v1 = p2.clone().sub(p1);
+    const v2 = p3.clone().sub(p1);
+    const normal = v1.cross(v2).normalize();
+
+    // Calculate slope angle
+    const slopeRadians = Math.acos(Math.abs(normal.y));
+    const slopeDegrees = (slopeRadians * 180) / Math.PI;
+
+    // Calculate aspect (direction of steepest slope)
+    const aspect = Math.atan2(normal.x, normal.z) * (180 / Math.PI);
+
+    // Interpolate elevation at point
+    const x = point.x / scale + width / 2;
+    const z = point.z / scale + height / 2;
+    const elevation = point.y;
+
+    selectedPoint = {
+      elevation: elevation.toFixed(2),
+      slope: slopeDegrees.toFixed(2),
+      aspect: ((aspect + 360) % 360).toFixed(1),
+      x: point.x.toFixed(2),
+      z: point.z.toFixed(2)
+    };
+
+    updatePointDisplay(selectedPoint);
+  }
+
+  function updatePointDisplay(data) {
+    const panel = document.getElementById('pointData');
+    const slopePercent = (Math.tan((parseFloat(data.slope) * Math.PI) / 180) * 100).toFixed(1);
+
+    panel.innerHTML = `
+      <div class="data-row">
+        <span class="label">Elevation</span>
+        <span class="value">${data.elevation} m</span>
+      </div>
+      <div class="data-row">
+        <span class="label">Slope Angle</span>
+        <span class="value">${data.slope}°</span>
+      </div>
+      <div class="data-row">
+        <span class="label">Slope Grade</span>
+        <span class="value">${slopePercent}%</span>
+      </div>
+      <div class="data-row">
+        <span class="label">Aspect</span>
+        <span class="value">${getAspectName(parseFloat(data.aspect))}</span>
+      </div>
+      <div class="slope-indicator">
+        <span class="label" style="flex: none;">Steepness:</span>
+        <div class="slope-bar">
+          <div class="slope-fill" style="width: ${Math.min(100, parseFloat(data.slope) * 3)}%"></div>
+        </div>
+      </div>
+      <div class="info-box">
+        Position: (${data.x}, ${data.z})
+      </div>
+    `;
+  }
+
+  function getAspectName(degrees) {
+    const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    const index = Math.round(degrees / 22.5) % 16;
+    return dirs[index];
+  }
+
+  function updateTerrainStats(elevationData) {
+    const max = Math.max(...elevationData);
+    const min = Math.min(...elevationData);
+    const avg = elevationData.reduce((a, b) => a + b) / elevationData.length;
+
+    document.getElementById('maxElev').textContent = max.toFixed(1) + ' m';
+    document.getElementById('minElev').textContent = min.toFixed(1) + ' m';
+
+    // Calculate average slope
+    const slopes = [];
+    for (let i = 0; i < elevationData.length - 65; i++) {
+      const dh = Math.abs(elevationData[i] - elevationData[i + 65]);
+      slopes.push((Math.atan(dh / 1.0) * 180) / Math.PI);
+    }
+    const avgSlope = slopes.reduce((a, b) => a + b) / slopes.length;
+    document.getElementById('avgSlope').textContent = avgSlope.toFixed(1) + '°';
+  }
+
+  function toggleWireframe() {
+    showWireframe = !showWireframe;
+    terrainMaterial.wireframe = showWireframe;
+  }
+
+  function resetView() {
+    camera.position.set(30, 40, 30);
+    camera.lookAt(0, 0, 0);
+  }
+
+  function exportData() {
+    if (!selectedPoint) {
+      alert('Click on terrain first to analyze a point');
+      return;
+    }
+
+    const data = {
+      timestamp: new Date().toISOString(),
+      point: selectedPoint,
+      slopePercent: (Math.tan((parseFloat(selectedPoint.slope) * Math.PI) / 180) * 100).toFixed(1)
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `terrain-analysis-${Date.now()}.json`;
+    a.click();
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+
+  window.addEventListener('resize', () => {
+    const canvas = document.getElementById('canvas');
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  });
+
+  // Start the application
+  init();
+</script>
