@@ -711,81 +711,175 @@ function initTerrain() {
     // Lights
     const ambient = new THREE.AmbientLight(0x404040, 1.5);
     terrainScene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0x00f2fe, 1.2);
+    const dirLight = new THREE.DirectionalLight(0xffaa00, 1.2);
     dirLight.position.set(100, 100, 50);
     terrainScene.add(dirLight);
-    const redLight = new THREE.DirectionalLight(0xff4757, 0.5);
+    const redLight = new THREE.DirectionalLight(0x990011, 0.6);
     redLight.position.set(-100, 50, -50);
     terrainScene.add(redLight);
 
-    // Generate procedural mountain terrain
-    const geometry = new THREE.PlaneGeometry(160, 160, 64, 64);
+    // Sort segments by ID order (NH07-S01 to NH07-S12)
+    const sortedSegs = [...allSegments].sort((a, b) => {
+        const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
+        const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
+        return numA - numB;
+    });
+
+    const getSectorAtZ = (z) => {
+        const t = Math.max(0, Math.min(1, (z + 100) / 200));
+        const idx = Math.min(sortedSegs.length - 1, Math.floor(t * sortedSegs.length));
+        return sortedSegs[idx] || sortedSegs[0];
+    };
+
+    const getHighwayX = (z) => {
+        const t = (z + 100) / 200;
+        return Math.sin(t * Math.PI * 2) * 18;
+    };
+
+    // Generate real NH-07 mountain terrain surface using segment elevation profiles
+    const geometry = new THREE.PlaneGeometry(200, 200, 80, 80);
     geometry.rotateX(-Math.PI / 2);
 
     const vertices = geometry.attributes.position.array;
     for (let i = 0; i < vertices.length; i += 3) {
         const x = vertices[i];
         const z = vertices[i + 2];
-        let y = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 15;
-        y += Math.sin(x * 0.3) * Math.cos(z * 0.2) * 5;
-        y -= Math.abs(x) * 0.4;
-        y += (Math.random() - 0.5) * 1.5;
+
+        const seg = getSectorAtZ(z);
+        const baseElev = seg ? (seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
+        const slopeDeg = seg ? (seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)) : 30;
+
+        const hwX = getHighwayX(z);
+        const distFromHw = Math.abs(x - hwX);
+
+        let y = (baseElev - 200) / 35;
+        if (distFromHw > 8) {
+            const mountainRise = Math.tan((slopeDeg * Math.PI) / 180) * (distFromHw - 8) * 0.4;
+            y += Math.min(45, mountainRise);
+        }
+        y += Math.sin(x * 0.2) * Math.cos(z * 0.2) * 2.0;
+
         vertices[i + 1] = y;
     }
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshStandardMaterial({
-        color: 0x0a1929,
-        emissive: 0x051320,
+        color: 0x121e2d,
+        emissive: 0x081220,
         wireframe: true,
-        roughness: 0.5,
+        roughness: 0.6,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.85
     });
 
     const terrain = new THREE.Mesh(geometry, material);
     terrainScene.add(terrain);
 
-    // Telemetry particles along highway
-    const particleCount = 100;
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-    const particleSpeeds = new Float32Array(particleCount);
-
-    for(let i = 0; i < particleCount; i++) {
-        let z = -80 + Math.random() * 160;
-        let y = Math.sin(0) * Math.cos(z * 0.1) * 15 + Math.sin(0) * Math.cos(z * 0.2) * 5 + 1.5;
-        let x = (Math.random() - 0.5) * 4;
-
-        particlePositions[i*3] = x;
-        particlePositions[i*3+1] = y;
-        particlePositions[i*3+2] = z;
-        particleSpeeds[i] = 0.1 + Math.random() * 0.4;
-    }
-
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    const particleMaterial = new THREE.PointsMaterial({
-        color: 0x00f2fe,
-        size: 0.8,
-        transparent: true,
-        blending: THREE.AdditiveBlending
-    });
-    const particles = new THREE.Points(particleGeometry, particleMaterial);
-    terrainScene.add(particles);
-
-    // Highway line
+    // Render Real NH-07 Highway Curve Line
     const hwGeo = new THREE.BufferGeometry();
     const hwVerts = [];
-    for (let z = -80; z <= 80; z += 2) {
-        let y = Math.sin(0) * Math.cos(z * 0.1) * 15;
-        y += Math.sin(0) * Math.cos(z * 0.2) * 5;
-        y += 1;
-        hwVerts.push(0, y, z);
+    for (let z = -100; z <= 100; z += 2) {
+        const seg = getSectorAtZ(z);
+        const baseElev = seg ? (seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)) : 350;
+        const hwX = getHighwayX(z);
+        const hwY = (baseElev - 200) / 35 + 0.8;
+        hwVerts.push(hwX, hwY, z);
     }
     hwGeo.setAttribute('position', new THREE.Float32BufferAttribute(hwVerts, 3));
-    const hwMat = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 2 });
+    const hwMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const highway = new THREE.Line(hwGeo, hwMat);
     terrainScene.add(highway);
+
+    // Interactive 3D Points of Elevation & Depth (3D Pin Markers for S01 to S12)
+    const pinGroup = new THREE.Group();
+    const pinObjects = [];
+
+    sortedSegs.forEach((seg, index) => {
+        const t = (index + 0.5) / Math.max(1, sortedSegs.length);
+        const z = -100 + t * 200;
+        const x = getHighwayX(z);
+        const baseElev = seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350);
+        const groundY = (baseElev - 200) / 35 + 0.8;
+
+        const riskClass = seg.risk_level ? seg.risk_level.toLowerCase() : 'stable';
+        let pinColor = 0x2ed573; // Stable Green
+        if (riskClass === 'unstable') pinColor = 0x990011; // Dark Red
+        else if (riskClass === 'marginal') pinColor = 0xff9900; // Solar Amber
+
+        // Vertical Pin Stem
+        const stemGeo = new THREE.CylinderGeometry(0.25, 0.25, 7, 8);
+        const stemMat = new THREE.MeshBasicMaterial({ color: pinColor, transparent: true, opacity: 0.85 });
+        const stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.position.set(x, groundY + 3.5, z);
+
+        // Pin Top Sphere
+        const headGeo = new THREE.SphereGeometry(1.2, 16, 16);
+        const headMat = new THREE.MeshStandardMaterial({
+            color: pinColor,
+            emissive: pinColor,
+            emissiveIntensity: 0.6,
+            roughness: 0.2
+        });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.set(x, groundY + 7, z);
+
+        const pin = new THREE.Group();
+        pin.add(stem);
+        pin.add(head);
+        pin.userData = seg;
+
+        pinGroup.add(pin);
+        pinObjects.push(head);
+    });
+
+    terrainScene.add(pinGroup);
+
+    // Interactive HUD Update on Hover / Raycasting
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const updateHUD = (seg) => {
+        if (!seg) return;
+        const thSector = document.getElementById('thud-sector');
+        const thElev = document.getElementById('thud-elev');
+        const thDepth = document.getElementById('thud-depth');
+        const thSlope = document.getElementById('thud-slope');
+        const thFos = document.getElementById('thud-fos');
+
+        if (thSector) thSector.textContent = `${seg.id} (${seg.name})`;
+        if (thElev) thElev.textContent = `${seg.elevation || (seg.terrain ? seg.terrain.mean_elevation_m : 350)} m`;
+        if (thDepth) thDepth.textContent = `${seg.soil ? (seg.soil.depth_m || seg.soil.soil_depth_m) : 2.5} m`;
+        if (thSlope) thSlope.textContent = `${seg.slope ? seg.slope.beta_deg : (seg.terrain ? seg.terrain.max_slope_deg : 30)}°`;
+        if (thFos) {
+            thFos.textContent = seg.fos ? seg.fos.min.toFixed(2) : '1.00';
+            thFos.style.color = seg.risk_level === 'UNSTABLE' ? '#990011' : (seg.risk_level === 'MARGINAL' ? '#ff9900' : '#2ed573');
+        }
+    };
+
+    const onPointerMove = (event) => {
+        const rect = terrainRenderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, terrainCamera);
+        const intersects = raycaster.intersectObjects(pinObjects);
+
+        if (intersects.length > 0) {
+            const hitSeg = intersects[0].object.parent.userData;
+            updateHUD(hitSeg);
+            terrainRenderer.domElement.style.cursor = 'pointer';
+        } else {
+            terrainRenderer.domElement.style.cursor = 'default';
+        }
+    };
+
+    terrainRenderer.domElement.addEventListener('pointermove', onPointerMove);
+    terrainRenderer.domElement.addEventListener('click', onPointerMove);
+
+    // Initial HUD Load
+    if (sortedSegs.length > 0) {
+        updateHUD(sortedSegs[0]);
+    }
 
     let orbitAngle = 0;
     function animateTerrain() {
