@@ -655,7 +655,7 @@ header p {
 }
 
 .red-dot { background: var(--risk-unstable); box-shadow: 0 0 6px var(--risk-unstable); }
-.orange-dot { background: var(--risk-marginal); box-shadow: 0 0 6px var(--risk-marginal); }
+.yellow-dot, .orange-dot { background: #ffc800; box-shadow: 0 0 6px #ffc800; }
 .green-dot { background: var(--risk-stable); box-shadow: 0 0 6px var(--risk-stable); }
 .purple-dot { background: #a855f7; box-shadow: 0 0 6px #a855f7; }
 
